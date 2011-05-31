@@ -3,7 +3,7 @@
 OUTPUTBEAM = ${PWD}/ebin
 
 .erl.beam:
-	erlc -W $< ; mv $@ ${OUTPUTBEAM}
+	erlc -D DEBUG -o ${OUTPUTBEAM} -W $<
 
 ERL = erl -boot start_clean -pa ${MLB_WRAPPER_HOME}/ebin
 
