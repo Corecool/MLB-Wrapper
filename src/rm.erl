@@ -11,7 +11,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/1]).
+-export([start_link/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -35,8 +35,8 @@
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(ResNum) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, ResNum, []).
+start_link() ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -53,8 +53,8 @@ start_link(ResNum) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init(ResNum) ->
-    {ok,load_resource(ResNum)}.
+init(_Args) ->
+    {ok,reload_resource()}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -70,10 +70,21 @@ init(ResNum) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_call({find_res,#resource{id = ID}},_From,State) ->
+    List = [Res || Res <- State, Res#resource.id =:= ID],
+    Reply = try hd(List) of
+		Item -> Item
+	    catch
+		error:badarg -> notexist
+	    end,
+    {reply,Reply,State};
+
 handle_call(get_res_num, _From, State) ->
     {reply,length(State),State};
+
 handle_call(get_res, _From, State) ->
     {reply,State,State};
+
 handle_call(_Request, _From, State) ->
     Reply = ok,
     {reply, Reply, State}.
@@ -90,6 +101,7 @@ handle_call(_Request, _From, State) ->
 %%--------------------------------------------------------------------
 handle_cast(stop,State) ->
     {stop,normal,State};
+
 handle_cast({add_res,#resource{id = ID} = Res},State) ->
     case lists:any(fun(#resource{} = X) ->
 			 X#resource.id =:= ID end,State) of
@@ -98,7 +110,19 @@ handle_cast({add_res,#resource{id = ID} = Res},State) ->
 	false ->
 	    NewState = [Res | State],
 	    {noreply,NewState}
-    end.
+    end;
+
+handle_cast({remove_res,#resource{} = Res},State) ->
+    NewState = lists:delete(Res,State),
+    {noreply, NewState};
+
+handle_cast(reload_res,_State) ->
+    NewState = rm:reload_resource(),
+    {noreply,NewState};
+    
+handle_cast(_Msg,State) ->
+    {noreply, State}.
+
 
 
 %%--------------------------------------------------------------------
@@ -143,12 +167,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-load_resource(Num) when is_integer(Num) ->
-    Seq = lists:seq(0,Num - 1),
+reload_resource() ->
+    Seq = lists:seq(0,9),
     lists:foldr(fun(X,List) ->
 			[#resource{id = X} | List]
 		end,
-		[],Seq);
-load_resource(_) ->
-    ok.
+		[],Seq).
    
