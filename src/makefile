@@ -3,11 +3,11 @@
 OUTPUTBEAM = ${MLB_WRAPPER_HOME}/ebin
 
 .erl.beam:
-	erlc -W $< ; mv $@ ${OUTPUTBEAM}
+	erlc -o ${OUTPUTBEAM} -W $<
 
 ERL = erl -boot start_clean 
 
-MODS = lirs
+MODS = rm lirs
 
 all: compile
 

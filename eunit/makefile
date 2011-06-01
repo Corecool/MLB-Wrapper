@@ -7,10 +7,11 @@ OUTPUTBEAM = ${PWD}/ebin
 
 ERL = erl -boot start_clean -pa ${MLB_WRAPPER_HOME}/ebin
 
-MODS = lirs_tests 
+MODS = rm_tests lirs_tests 
 
 all: compile
-	${ERL} -pa ${OUTPUTBEAM} -s lirs_tests test \
+	${ERL} -pa ${OUTPUTBEAM} -s rm_tests test \
+				 -s lirs_tests test \
 				 -s init stop
 
 compile: ${MODS:%=%.beam}
