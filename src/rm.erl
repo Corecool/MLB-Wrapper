@@ -117,7 +117,7 @@ handle_cast({remove_res,#resource{} = Res},State) ->
     {noreply, NewState};
 
 handle_cast(reload_res,_State) ->
-    NewState = rm:reload_resource(),
+    NewState = reload_resource(),
     {noreply,NewState};
     
 handle_cast(_Msg,State) ->

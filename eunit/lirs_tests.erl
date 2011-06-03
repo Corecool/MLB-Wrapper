@@ -1,46 +1,45 @@
 -module(lirs_tests).
 -include_lib("eunit/include/eunit.hrl").
 
--record(cache, {resList = [],hirList = [],lirList = []}).
--record(resource,{id,status = none,location = []}).
-
-create_res() ->
-    Seq = lists:seq(0,9),
-    lists:foldl(fun(X,List) ->
-			[#resource{id = X} | List]
-		end,
-		[],Seq).
+-record(cacheItem,{id,status}).
 
 init_test_() ->
-    ResList = create_res(),
-    State = #cache{resList = ResList,
-			     hirList = [],
-			     lirList = []},
-    ?_assertMatch({ok,State},lirs:init(10)).
+    {spawn,
+     {setup,
+      fun() ->
+	      lirs:start_link("/tmp/init") end,
+      fun(_) ->
+	      gen_server:cast(lirs,stop),
+	      ?cmd("rm -f /tmp/init")
+      end,
+      [?_assertMatch([{lirQueue,[]}],
+		     ets:lookup(lirsRam,lirQueue)),
+       ?_assertMatch([{hirQueue,[]}],
+		     ets:lookup(lirsRam,hirQueue)),
+       ?_assertEqual([{conf,{size,5},{lirPercent,0.6}}],
+		     ets:lookup(lirsRam,conf))]
+     }
+    }.
 
 first_element_test_() ->
     {spawn,
      {setup,
       fun() ->
-	      lirs:start_link(10)
+	      lirs:start_link("/tmp/first"),
+	      gen_server:cast(lirs,{visit,5})
       end,
       fun(_) ->
-	      gen_server:cast(lirs,stop)
+	      gen_server:cast(lirs,stop),
+	      ?cmd("rm -f /tmp/first")		  
       end,
-      ?_test(
-	 begin
-	     {Res,NewState} = gen_server:call(lirs,
-					      #resource{id = 6}),
-	     ExpectState = #cache{resList = create_res(),
-				  hirList = [],
-				  lirList = [Res]},
-	     ?assertEqual(#resource{id = 6,status = lir,
-				    location = [self()]},Res),
-	     ?assertEqual(ExpectState,NewState)
-	 end
-	)}}.
+      [?_assertMatch([{lirQueue,
+		       [#cacheItem{id = 5, status = lir}]}],
+		     ets:lookup(lirsRam,lirQueue)),
+       ?_assertMatch([{hirQueue,[]}],
+		     ets:lookup(lirsRam,hirQueue)),
+       ?_assertMatch([{5,lir}],ets:lookup(lirsRam,5))]
+      }
+     }.
 
-    
-    
-    
-   
+		    
+      

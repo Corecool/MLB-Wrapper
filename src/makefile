@@ -3,7 +3,7 @@
 OUTPUTBEAM = ${MLB_WRAPPER_HOME}/ebin
 
 .erl.beam:
-	erlc -o ${OUTPUTBEAM} -W $<
+	erlc -DTEST -o ${OUTPUTBEAM} -W $<
 
 ERL = erl -boot start_clean 
 

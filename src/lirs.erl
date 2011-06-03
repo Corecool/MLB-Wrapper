@@ -10,8 +10,12 @@
 
 -behaviour(gen_server).
 
+-define(NOTEST, true).
+-include_lib("eunit/include/eunit.hrl").
+
 %% API
 -export([start_link/1]).
+-export([visit_resource/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -19,8 +23,7 @@
 
 -define(SERVER, ?MODULE). 
 
--record(cache, {resList = [],hirList = [],lirList = []}).
--record(resource,{id,status = none,location = []}).
+-record(cacheItem,{id,status}).
 
 %%%===================================================================
 %%% API
@@ -33,8 +36,9 @@
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(ResNum) ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, ResNum, []).
+start_link(FileName) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, 
+			  FileName,[]).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -51,14 +55,16 @@ start_link(ResNum) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init(ResNum) ->
-    Seq = lists:seq(0,ResNum - 1),
-    ResList = lists:foldl(fun(X,List) ->
-				  [#resource{id = X} | List]
-			  end,
-			  [],Seq),
-    {ok, #cache{resList = ResList}}.
-
+init(FileName) ->
+    create_tables(FileName),
+    case dets:info(lirsDisk,size) of
+	Size when Size > 0 ->
+	    recovery_tables();
+	Size when Size == 0 ->
+	    init_tables()
+    end,
+	
+    {ok,ok}.
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -87,13 +93,13 @@ handle_call(Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast(Msg, State) ->
-    case Msg of
-	stop ->
-	    {stop,normal,State};
-	_ ->
-	    {noreply, State}
-    end.
+handle_cast(stop,State) ->
+    {stop,normal,State};
+handle_cast({visit,ID},State) ->
+    visit_resource(ID),
+    {noreply,State};
+handle_cast(_Msg, State) ->
+    {noreply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -119,6 +125,10 @@ handle_info(_Info, State) ->
 %% @spec terminate(Reason, State) -> void()
 %% @end
 %%--------------------------------------------------------------------
+terminate(normal,_State) ->
+    dets:close(lirsDisk),
+    ok;
+
 terminate(_Reason, _State) ->
     ok.
 
@@ -136,3 +146,76 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+create_tables(FileName) ->
+    dets:open_file(lirsDisk,[{file,FileName}]),
+    ets:new(lirsRam,[named_table]).
+    
+recovery_tables() ->
+    ?debugMsg("Recovery.."),
+    ets:from_dets(lirsRam,lirsDisk).
+
+init_tables() ->
+    ?debugMsg("Init..."),
+    dets:insert(lirsDisk,{lirQueue,[]}),
+    dets:insert(lirsDisk,{hirQueue,[]}),
+    dets:insert(lirsDisk,{conf,{size,5},{lirPercent,0.6}}),
+    ets:from_dets(lirsRam,lirsDisk).
+
+lookup(Key) ->
+    ets:lookup(lirsRam,Key).
+
+get_cur_lirs_num() ->
+    [{lirQueue,LirQueue}] = lookup(lirQueue),
+    length(LirQueue).
+
+get_lir_cache_size() ->
+    [{conf,{size,S},{lirPercent,P}}] = lookup(conf),
+    round(S * P - 0.5).
+
+get_res_prev_status(ID) ->
+    case lookup(ID) of
+	[] ->
+	    non_resident;
+	[{ID,Value}]->
+	    Value
+    end.
+
+%% 最初阶段，LIR队列未满。
+initial_stage(ID) ->
+    ok.
+
+%% 访问LIR资源。
+access_lir(ID) ->
+    ok.
+
+%% 访问HIR资源。
+access_hir(ID) ->
+    ok.
+
+%% 访问缓存未命中资源。
+access_non_resident(ID) ->
+    ok.
+
+visit_resource(ID) ->
+    PrevStatus = get_res_prev_status(ID),
+    CurLirNum = get_cur_lirs_num(),
+    LirSize = get_lir_cache_size(),
+    if
+	CurLirNum < LirSize ->
+	    initial_stage(ID);
+	PrevStatus == lir ->
+	    access_lir(ID);
+	PrevStatus == hir ->
+	    access_hir(ID);
+	PrevStatus == non_resident ->
+	    access_non_resident(ID)
+    end.
+
+
+	    
+	    
+	
+    
+		
+    
