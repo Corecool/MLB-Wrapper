@@ -152,11 +152,9 @@ create_tables(FileName) ->
     ets:new(lirsRam,[named_table]).
     
 recovery_tables() ->
-    ?debugMsg("Recovery.."),
     ets:from_dets(lirsRam,lirsDisk).
 
 init_tables() ->
-    ?debugMsg("Init..."),
     dets:insert(lirsDisk,{lirQueue,[]}),
     dets:insert(lirsDisk,{hirQueue,[]}),
     dets:insert(lirsDisk,{conf,{size,5},{lirPercent,0.6}}),
@@ -164,6 +162,16 @@ init_tables() ->
 
 lookup(Key) ->
     ets:lookup(lirsRam,Key).
+
+lookup(Key,Pos) ->
+    ets:lookup_element(lirsRam,Key,Pos).
+
+update(Key,Value) ->
+    dets:insert(lirsDisk,{Key,Value}),
+    ets:insert(lirsRam,{Key,Value}),
+    ok.
+
+%% 下面为业务逻辑方法，上面为持久化方法（涉及ets,dets）
 
 get_cur_lirs_num() ->
     [{lirQueue,LirQueue}] = lookup(lirQueue),
@@ -181,20 +189,40 @@ get_res_prev_status(ID) ->
 	    Value
     end.
 
+move_top(#cacheItem{id = _ID,status = _Status} = Item,
+	 Queue) ->
+    lists:delete(Item,Queue),
+    enter_queue(Item,Queue).
+
+enter_queue(#cacheItem{id = _ID,status = _Status} = Item,
+	       Queue) ->
+    NewQueue = [Item | Queue],
+    update(lirQueue,NewQueue).
+
 %% 最初阶段，LIR队列未满。
 initial_stage(ID) ->
-    ok.
-
+    LirQueue = lookup(lirQueue,2),
+    case lists:filter(fun(#cacheItem{} = X) ->
+		      X#cacheItem.id =:= ID end,
+	      LirQueue) of
+	[Item] ->
+	    move_top(Item,LirQueue);
+	[] ->
+	    Item = #cacheItem{id = ID,status = lir},
+	    enter_queue(Item,LirQueue),
+	    update(ID,lir)		
+    end.
+	   
 %% 访问LIR资源。
-access_lir(ID) ->
+access_lir(_ID) ->
     ok.
 
 %% 访问HIR资源。
-access_hir(ID) ->
+access_hir(_ID) ->
     ok.
 
 %% 访问缓存未命中资源。
-access_non_resident(ID) ->
+access_non_resident(_ID) ->
     ok.
 
 visit_resource(ID) ->

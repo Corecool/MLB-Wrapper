@@ -26,16 +26,17 @@ first_element_test_() ->
      {setup,
       fun() ->
 	      lirs:start_link("/tmp/first"),
-	      gen_server:cast(lirs,{visit,5})
+	      gen_server:cast(lirs,{visit,5}),
+	      timer:sleep(1000)
       end,
       fun(_) ->
 	      gen_server:cast(lirs,stop),
 	      ?cmd("rm -f /tmp/first")		  
       end,
-      [?_assertMatch([{lirQueue,
+      [?_assertEqual([{lirQueue,
 		       [#cacheItem{id = 5, status = lir}]}],
 		     ets:lookup(lirsRam,lirQueue)),
-       ?_assertMatch([{hirQueue,[]}],
+       ?_assertEqual([{hirQueue,[]}],
 		     ets:lookup(lirsRam,hirQueue)),
        ?_assertMatch([{5,lir}],ets:lookup(lirsRam,5))]
       }
