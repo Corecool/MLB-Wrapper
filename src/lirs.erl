@@ -166,10 +166,12 @@ lookup(Key) ->
 lookup(Key,Pos) ->
     ets:lookup_element(lirsRam,Key,Pos).
 
-update(Key,Value) ->
-    dets:insert(lirsDisk,{Key,Value}),
-    ets:insert(lirsRam,{Key,Value}),
-    ok.
+update(ID,Status) when is_integer(ID) ->
+    ets:insert(lirsRam,{ID,Status}),
+    #cacheItem{id = ID,status = Status};
+update(Key,Status) when is_atom(Key) ->
+    %% dets:insert(lirsDisk,{Key,Value}),
+    ets:insert(lirsRam,{Key,Status}).
 
 %% 下面为业务逻辑方法，上面为持久化方法（涉及ets,dets）
 
@@ -181,6 +183,10 @@ get_lir_cache_size() ->
     [{conf,{size,S},{lirPercent,P}}] = lookup(conf),
     round(S * P - 0.5).
 
+get_total_cache_size() ->
+    {size,TotalSize} = lookup(conf,2),
+    TotalSize.
+
 get_res_prev_status(ID) ->
     case lookup(ID) of
 	[] ->
@@ -189,41 +195,138 @@ get_res_prev_status(ID) ->
 	    Value
     end.
 
-move_top(#cacheItem{id = _ID,status = _Status} = Item,
-	 Queue) ->
-    lists:delete(Item,Queue),
-    enter_queue(Item,Queue).
+move_top(#cacheItem{} = Item,Key) when
+      is_atom(Key) ->
+    remove_from_queue(Item,Key),
+    enter_queue(Item,Key),
+    ok.
 
-enter_queue(#cacheItem{id = _ID,status = _Status} = Item,
-	       Queue) ->
+move_top(#cacheItem{id = ID} = Item,Key,NewState) when
+      is_atom(Key),is_atom(NewState) ->
+    remove_from_queue(Item,Key),
+    NewItem = update(ID,NewState),
+    enter_queue(NewItem,Key),
+    ok.
+
+
+remove_from_queue(#cacheItem{} = Item,Key) when
+      is_atom(Key) ->
+    Queue = lookup(Key,2),
+    NewQueue = lists:delete(Item,Queue),
+    update(Key,NewQueue),
+    ok.
+
+remove_oldest_hiritem() ->
+    
+    OldestHirItem = lists:last(lookup(hirQueue,2)),
+    update(OldestHirItem#cacheItem.id,non_resident),
+    remove_from_queue(OldestHirItem,hirQueue).
+
+is_full_hirqueue() ->
+    HirQueueSize = get_total_cache_size() - 
+	get_lir_cache_size(),
+    length(lookup(hirQueue)) >= HirQueueSize.
+
+enter(#cacheItem{} = Item,Key) when
+      Key == hirQueue; Key == lirQueue ->
+    Queue = lookup(Key,2),
     NewQueue = [Item | Queue],
-    update(lirQueue,NewQueue).
+    update(Key,NewQueue),
+    ok.
+
+before_enter_hir_queue() ->
+    HirQueueFull = is_full_hirqueue(),
+    if
+	HirQueueFull == true ->
+	    remove_oldest_hiritem();
+	true -> ok
+    end.
+    
+enter_queue(#cacheItem{} = Item,hirQueue) ->
+    before_enter_hir_queue(),
+    enter(Item,hirQueue);
+enter_queue(#cacheItem{} = Item,lirQueue) ->
+    enter(Item,lirQueue).
 
 %% 最初阶段，LIR队列未满。
 initial_stage(ID) ->
-    LirQueue = lookup(lirQueue,2),
     case lists:filter(fun(#cacheItem{} = X) ->
-		      X#cacheItem.id =:= ID end,
-	      LirQueue) of
+		      X#cacheItem.id == ID end,
+	       lookup(lirQueue,2)) of
 	[Item] ->
-	    move_top(Item,LirQueue);
+	    move_top(Item,lirQueue);
 	[] ->
-	    Item = #cacheItem{id = ID,status = lir},
-	    enter_queue(Item,LirQueue),
-	    update(ID,lir)		
+	    Item = update(ID,lir),
+	    enter_queue(Item,lirQueue)
     end.
 	   
 %% 访问LIR资源。
-access_lir(_ID) ->
-    ok.
+access_lir(ID) ->
+    InitLirQueue = lookup(lirQueue,2),
+    [Item] = lists:filter(
+	       fun(#cacheItem{} = X) ->
+		       X#cacheItem.id == ID andalso 
+			   X#cacheItem.status == lir end,
+	       InitLirQueue),
+    move_top(Item,lirQueue),
+    OldestLirItem = lists:last(InitLirQueue),
+    if
+	OldestLirItem =:= Item ->
+	    pruning()
+    end.
+
+pruning() ->
+    NewQueue = lists:dropwhile(
+		 fun(#cacheItem{} = X) ->
+			 X#cacheItem.status /= lir end,
+		 lists:reverse(lookup(lirQueue,2))),
+    update(lirQueue,lists:reverse(NewQueue)).
+    
 
 %% 访问HIR资源。
-access_hir(_ID) ->
-    ok.
+access_hir(ID) ->
+    case lists:filter(
+	   fun(#cacheItem{} = X) ->
+		   X#cacheItem.id == ID andalso 
+		       X#cacheItem.status == hir end,
+	   lookup(lirQueue,2)) of
+	[Item] ->
+	    in_queue(Item);
+	[] ->
+	    Item = update(ID,hir),
+	    not_in_queue(Item)
+    end.
+    
+not_in_queue(#cacheItem{} = Item) ->
+    enter_queue(Item,lirQueue),
+    move_top(Item,hirQueue).
+
+in_queue(#cacheItem{} = Item) ->
+    move_top(Item,lirQueue,lir),
+    remove_from_queue(Item,hirQueue),
+    old_lir_to_hir(),
+    pruning().
+
+old_lir_to_hir() ->
+    OldestLirItem = lists:last(lookup(lirQueue,2)),
+    remove_from_queue(OldestLirItem,lookup(lirQueue,2)),
+    NewHirItem = update(OldestLirItem#cacheItem.id,hir),
+    enter_queue(NewHirItem,hirQueue).    
 
 %% 访问缓存未命中资源。
-access_non_resident(_ID) ->
-    ok.
+access_non_resident(ID) ->
+    before_enter_hir_queue(),
+    case lists:filter(
+	   fun(#cacheItem{} = X) ->
+		   X#cacheItem.id == ID andalso
+		       X#cacheItem.status == non_resident
+	   end,lookup(lirQueue,2)) of
+	[Item] ->
+	    in_queue(Item);
+	[] ->
+	    Item = update(ID,hir),
+	    not_in_queue(Item)
+    end.
 
 visit_resource(ID) ->
     PrevStatus = get_res_prev_status(ID),

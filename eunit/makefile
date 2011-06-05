@@ -14,7 +14,10 @@ all: compile
 				 -s lirs_tests test \
 				 -s init stop
 
-compile: ${MODS:%=%.beam}
+compile: srcdir ${MODS:%=%.beam} 
+
+srcdir:
+	cd ${MLB_WRAPPER_HOME}/src; make -k
 
 clean:
 	rm -fr erl_crash.dump
