@@ -36,9 +36,13 @@
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
+start_link({test,FileName}) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, 
+			  {test,FileName},[]);
 start_link(FileName) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, 
 			  FileName,[]).
+
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -55,6 +59,10 @@ start_link(FileName) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
+init({test,FileName}) ->
+    create_tables(FileName),
+    init_tables(test),
+    {ok,ok};
 init(FileName) ->
     create_tables(FileName),
     case dets:info(lirsDisk,size) of
@@ -63,8 +71,8 @@ init(FileName) ->
 	Size when Size == 0 ->
 	    init_tables()
     end,
-	
     {ok,ok}.
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -160,6 +168,31 @@ init_tables() ->
     dets:insert(lirsDisk,{conf,{size,5},{lirPercent,0.6}}),
     ets:from_dets(lirsRam,lirsDisk).
 
+init_tables(test) ->
+    Res1 = #cacheItem{id = 1,status = lir},
+    Res2 = #cacheItem{id = 2,status = non_resident},
+    Res3 = #cacheItem{id = 3,status = hir},
+    Res4 = #cacheItem{id = 4,status = lir},
+    Res5 = #cacheItem{id = 5,status = hir},
+    Res6 = #cacheItem{id = 6,status = non_resident},
+    Res8 = #cacheItem{id = 8,status = lir},
+    Res9 = #cacheItem{id = 9,status = non_resident},
+    LirQueue = [Res5,Res3,Res2,Res1,Res6,Res9,Res4,Res8],
+    dets:insert(lirsDisk,{lirQueue,LirQueue}),
+    HirQueue = [Res5,Res3],
+    dets:insert(lirsDisk,{hirQueue,HirQueue}),
+    dets:insert(lirsDisk,{1,lir}),
+    dets:insert(lirsDisk,{2,non_resident}),
+    dets:insert(lirsDisk,{3,hir}),
+    dets:insert(lirsDisk,{4,lir}),
+    dets:insert(lirsDisk,{5,hir}),
+    dets:insert(lirsDisk,{6,non_resident}),
+    dets:insert(lirsDisk,{8,lir}),
+    dets:insert(lirsDisk,{9,non_resident}),
+    dets:insert(lirsDisk,{conf,{size,5},{lirPercent,0.6}}),
+    ets:from_dets(lirsRam,lirsDisk).
+    
+
 lookup(Key) ->
     ets:lookup(lirsRam,Key).
 
@@ -173,6 +206,19 @@ update(Key,Status) when is_atom(Key) ->
     %% dets:insert(lirsDisk,{Key,Value}),
     ets:insert(lirsRam,{Key,Status}).
 
+update(Key,ID,Status) when
+      is_integer(ID),is_atom(Key),is_atom(Status) ->
+    Queue = lookup(Key,2),
+    NewQueue = 
+	lists:map(
+	  fun(#cacheItem{} = X) ->
+		  if
+		      X#cacheItem.id == ID ->
+			  X#cacheItem{status = Status};
+		      true -> X
+		  end end,Queue),
+    update(Key,NewQueue).    				 
+    
 %% 下面为业务逻辑方法，上面为持久化方法（涉及ets,dets）
 
 get_cur_lirs_num() ->
@@ -216,16 +262,19 @@ remove_from_queue(#cacheItem{} = Item,Key) when
     update(Key,NewQueue),
     ok.
 
-remove_oldest_hiritem() ->
-    
+remove_oldest_hiritem() ->    
     OldestHirItem = lists:last(lookup(hirQueue,2)),
     update(OldestHirItem#cacheItem.id,non_resident),
-    remove_from_queue(OldestHirItem,hirQueue).
+    remove_from_queue(OldestHirItem,hirQueue),
+    change_state_in_lirqueue(OldestHirItem,non_resident).
+
+change_state_in_lirqueue(#cacheItem{} = Item,State) ->
+    update(lirQueue,Item#cacheItem.id,State).
 
 is_full_hirqueue() ->
     HirQueueSize = get_total_cache_size() - 
 	get_lir_cache_size(),
-    length(lookup(hirQueue)) >= HirQueueSize.
+    length(lookup(hirQueue,2)) >= HirQueueSize.
 
 enter(#cacheItem{} = Item,Key) when
       Key == hirQueue; Key == lirQueue ->
@@ -272,7 +321,8 @@ access_lir(ID) ->
     OldestLirItem = lists:last(InitLirQueue),
     if
 	OldestLirItem =:= Item ->
-	    pruning()
+	    pruning();
+	true -> ok
     end.
 
 pruning() ->
@@ -309,7 +359,7 @@ in_queue(#cacheItem{} = Item) ->
 
 old_lir_to_hir() ->
     OldestLirItem = lists:last(lookup(lirQueue,2)),
-    remove_from_queue(OldestLirItem,lookup(lirQueue,2)),
+    remove_from_queue(OldestLirItem,lirQueue),
     NewHirItem = update(OldestLirItem#cacheItem.id,hir),
     enter_queue(NewHirItem,hirQueue).    
 
@@ -342,6 +392,15 @@ visit_resource(ID) ->
 	PrevStatus == non_resident ->
 	    access_non_resident(ID)
     end.
+    %% debug(ID).
+
+debug(ID) ->
+    ?debugFmt("lirQueue is:~p~n",[lookup(lirQueue,2)]),
+    ?debugFmt("hirQueue is:~p~n",[lookup(hirQueue,2)]),
+    ?debugFmt("Current Res:~p~n",[lookup(ID)]),
+    ?debugMsg("######################").
+	
+    
 
 
 	    
