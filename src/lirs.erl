@@ -14,8 +14,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 %% API
--export([start_link/1]).
--export([visit_resource/1]).
+-export([start_link/0,start_link/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -29,6 +28,7 @@
 %%% API
 %%%===================================================================
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Starts the server
@@ -36,12 +36,14 @@
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link({test,FileName}) ->
+%% 供LIRS有初始数据时测试使用
+start_link(test) ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, 
-			  {test,FileName},[]);
-start_link(FileName) ->
+			  test,[]).
+
+start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, 
-			  FileName,[]).
+			  [],[]).
 
 
 %%%===================================================================
@@ -59,18 +61,14 @@ start_link(FileName) ->
 %%                     {stop, Reason}
 %% @end
 %%--------------------------------------------------------------------
-init({test,FileName}) ->
-    create_tables(FileName),
+%% 供LIRS有初始数据时测试使用
+init(test) ->
+    create_tables(),
     init_tables(test),
     {ok,ok};
-init(FileName) ->
-    create_tables(FileName),
-    case dets:info(lirsDisk,size) of
-	Size when Size > 0 ->
-	    recovery_tables();
-	Size when Size == 0 ->
-	    init_tables()
-    end,
+init(_Args) ->
+    create_tables(),
+    init_tables(),
     {ok,ok}.
 
 %%--------------------------------------------------------------------
@@ -134,7 +132,6 @@ handle_info(_Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 terminate(normal,_State) ->
-    dets:close(lirsDisk),
     ok;
 
 terminate(_Reason, _State) ->
@@ -154,20 +151,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-create_tables(FileName) ->
-    dets:open_file(lirsDisk,[{file,FileName}]),
-    ets:new(lirsRam,[named_table]).
-    
-recovery_tables() ->
-    ets:from_dets(lirsRam,lirsDisk).
-
-init_tables() ->
-    dets:insert(lirsDisk,{lirQueue,[]}),
-    dets:insert(lirsDisk,{hirQueue,[]}),
-    dets:insert(lirsDisk,{conf,{size,5},{lirPercent,0.6}}),
-    ets:from_dets(lirsRam,lirsDisk).
-
 init_tables(test) ->
     Res1 = #cacheItem{id = 1,status = lir},
     Res2 = #cacheItem{id = 2,status = non_resident},
@@ -178,19 +161,26 @@ init_tables(test) ->
     Res8 = #cacheItem{id = 8,status = lir},
     Res9 = #cacheItem{id = 9,status = non_resident},
     LirQueue = [Res5,Res3,Res2,Res1,Res6,Res9,Res4,Res8],
-    dets:insert(lirsDisk,{lirQueue,LirQueue}),
+    ets:insert(lirsRam,{lirQueue,LirQueue}),
     HirQueue = [Res5,Res3],
-    dets:insert(lirsDisk,{hirQueue,HirQueue}),
-    dets:insert(lirsDisk,{1,lir}),
-    dets:insert(lirsDisk,{2,non_resident}),
-    dets:insert(lirsDisk,{3,hir}),
-    dets:insert(lirsDisk,{4,lir}),
-    dets:insert(lirsDisk,{5,hir}),
-    dets:insert(lirsDisk,{6,non_resident}),
-    dets:insert(lirsDisk,{8,lir}),
-    dets:insert(lirsDisk,{9,non_resident}),
-    dets:insert(lirsDisk,{conf,{size,5},{lirPercent,0.6}}),
-    ets:from_dets(lirsRam,lirsDisk).
+    ets:insert(lirsRam,{hirQueue,HirQueue}),
+    ets:insert(lirsRam,{1,lir}),
+    ets:insert(lirsRam,{2,non_resident}),
+    ets:insert(lirsRam,{3,hir}),
+    ets:insert(lirsRam,{4,lir}),
+    ets:insert(lirsRam,{5,hir}),
+    ets:insert(lirsRam,{6,non_resident}),
+    ets:insert(lirsRam,{8,lir}),
+    ets:insert(lirsRam,{9,non_resident}),
+    ets:insert(lirsRam,{conf,{size,5},{lirPercent,0.6}}).
+
+create_tables() ->
+    ets:new(lirsRam,[named_table]).
+
+init_tables() ->
+    ets:insert(lirsRam,{lirQueue,[]}),
+    ets:insert(lirsRam,{hirQueue,[]}),
+    ets:insert(lirsRam,{conf,{size,5},{lirPercent,0.6}}).
     
 
 lookup(Key) ->
@@ -203,7 +193,6 @@ update(ID,Status) when is_integer(ID) ->
     ets:insert(lirsRam,{ID,Status}),
     #cacheItem{id = ID,status = Status};
 update(Key,Status) when is_atom(Key) ->
-    %% dets:insert(lirsDisk,{Key,Value}),
     ets:insert(lirsRam,{Key,Status}).
 
 update(Key,ID,Status) when
@@ -219,7 +208,7 @@ update(Key,ID,Status) when
 		  end end,Queue),
     update(Key,NewQueue).    				 
     
-%% 下面为业务逻辑方法，上面为持久化方法（涉及ets,dets）
+%% 下面为业务逻辑方法，上面为持久化方法（涉及ets）
 
 get_cur_lirs_num() ->
     [{lirQueue,LirQueue}] = lookup(lirQueue),
@@ -392,13 +381,12 @@ visit_resource(ID) ->
 	PrevStatus == non_resident ->
 	    access_non_resident(ID)
     end.
-    %% debug(ID).
 
-debug(ID) ->
-    ?debugFmt("lirQueue is:~p~n",[lookup(lirQueue,2)]),
-    ?debugFmt("hirQueue is:~p~n",[lookup(hirQueue,2)]),
-    ?debugFmt("Current Res:~p~n",[lookup(ID)]),
-    ?debugMsg("######################").
+%% debug(ID) ->
+%%     ?debugFmt("lirQueue is:~p~n",[lookup(lirQueue,2)]),
+%%     ?debugFmt("hirQueue is:~p~n",[lookup(hirQueue,2)]),
+%%     ?debugFmt("Current Res:~p~n",[lookup(ID)]),
+%%     ?debugMsg("######################").
 	
     
 

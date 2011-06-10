@@ -6,18 +6,13 @@
 lookup(Key) ->
     ets:lookup(lirsRam,Key).
 
-%% lookup(Key,Pos) ->
-%%     ets:lookup_element(lirsRam,Key,Pos).
-
-
 init_test_() ->
     {spawn,
      {setup,
       fun() ->
-	      lirs:start_link("/tmp/init") end,
+	      lirs:start_link() end,
       fun(_) ->
-	      gen_server:cast(lirs,stop),
-	      ?cmd("rm -f /tmp/init")
+	      gen_server:cast(lirs,stop)
       end,
       [?_assertMatch([{lirQueue,[]}],lookup(lirQueue)),
        ?_assertMatch([{hirQueue,[]}],lookup(hirQueue)),
@@ -30,13 +25,12 @@ first_lirs_test_() ->
     {spawn,
      {setup,
       fun() ->
-	      lirs:start_link("/tmp/first"),
+	      lirs:start_link(),
 	      gen_server:cast(lirs,{visit,5}),
 	      timer:sleep(100)
       end,
       fun(_) ->
-	      gen_server:cast(lirs,stop),
-	      ?cmd("rm -f /tmp/first")		  
+	      gen_server:cast(lirs,stop)
       end,
       [?_assertEqual([{lirQueue,
 		       [#cacheItem{id = 5, status = lir}]}],
@@ -50,15 +44,14 @@ second_lirs_test_() ->
     {spawn,
      {setup,
       fun() ->
-	      lirs:start_link("/tmp/second"),
+	      lirs:start_link(),
 	      gen_server:cast(lirs,{visit,1}),
 	      gen_server:cast(lirs,{visit,5}),
 	      gen_server:cast(lirs,{visit,1}),
 	      timer:sleep(100)
       end,
       fun(_) ->
-	      gen_server:cast(lirs,stop),
-	      ?cmd("rm -f /tmp/second")		  
+	      gen_server:cast(lirs,stop)
       end,
       [?_test(
 	  begin
@@ -78,7 +71,7 @@ third_lirs_test_() ->
     {spawn,
      {setup,
       fun() ->
-     	      lirs:start_link("/tmp/third"),
+     	      lirs:start_link(),
      	      gen_server:cast(lirs,{visit,1}),
      	      gen_server:cast(lirs,{visit,2}),
      	      gen_server:cast(lirs,{visit,3}),
@@ -86,8 +79,7 @@ third_lirs_test_() ->
      	      timer:sleep(100)
       end,
       fun(_) ->
-     	      gen_server:cast(lirs,stop),
-     	      ?cmd("rm -f /tmp/third")		  
+     	      gen_server:cast(lirs,stop)
       end,
       [?_test(
 	  begin
@@ -120,22 +112,21 @@ fourth_lirs_test_() ->
     {spawn,
      {setup,
       fun() ->
-     	      lirs:start_link("/tmp/fourth"),
+     	      lirs:start_link(),
      	      gen_server:cast(lirs,{visit,5}),
      	      gen_server:cast(lirs,{visit,7}),
-     	      gen_server:cast(lirs,{visit,8}),
+	      gen_server:cast(lirs,{visit,8}),
 	      gen_server:cast(lirs,{visit,5}),
 	      gen_server:cast(lirs,{visit,3}),
 	      gen_server:cast(lirs,{visit,8}),
-     	      gen_server:cast(lirs,{visit,6}),
+	      gen_server:cast(lirs,{visit,6}),
      	      gen_server:cast(lirs,{visit,6}),
 	      gen_server:cast(lirs,{visit,2}),
 	      gen_server:cast(lirs,{visit,7}),
-     	      timer:sleep(100)
+     	      timer:sleep(500)
       end,
       fun(_) ->
-     	      gen_server:cast(lirs,stop),
-     	      ?cmd("rm -f /tmp/fourth")		  
+     	      gen_server:cast(lirs,stop)
       end,
       [?_test(
 	  begin
@@ -170,11 +161,12 @@ fourth_lirs_test_() ->
      }
     }.
 
+%% 这组测试只是验证有初始值时LIRS能否正常工作
 fivth_lirs_test_() ->
     {spawn,
      {setup,
       fun() ->
-     	      lirs:start_link({test,"/tmp/fivth"}),
+     	      lirs:start_link(test),
      	      gen_server:cast(lirs,{visit,4}),
      	      gen_server:cast(lirs,{visit,8}),
      	      gen_server:cast(lirs,{visit,3}),
@@ -185,8 +177,7 @@ fivth_lirs_test_() ->
      	      timer:sleep(100)
       end,
       fun(_) ->
-     	      gen_server:cast(lirs,stop),
-     	      ?cmd("rm -f /tmp/fivth")		  
+     	      gen_server:cast(lirs,stop)
       end,
       [?_test(
 	  begin
