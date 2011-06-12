@@ -6,123 +6,46 @@
 		  description = "Best of Asia",
 		  rating = "BoA, you are still my No.1"}).
 
-reload_resource() ->
-    Seq = lists:seq(0,9),
-    lists:foldr(fun(X,List) ->
-			[#resource{id = X} | List]
-		end,
-		[],Seq).
 
-init_resource_test_() ->
+
+update_resource_test_() ->
     {spawn,
      {setup,
       fun() ->
-	      rm:start_link() end,
-      fun(_) ->
-	      gen_server:cast(rm,stop) end,
-      [?_assertEqual(10,gen_server:call(rm,get_res_num)),
-       ?_assertEqual(reload_resource(),
-		     gen_server:call(rm,get_res))]
-     }
-    }.
-
-add_resource_test_() ->
-    {spawn,
-     {setup,
-      fun() ->
-	      rm:start_link(),
-	      gen_server:cast(rm,{add_res,#resource{id = 16}})
+	      {ok,Pid} = rm:start_link(),
+	      gen_server:cast(
+		rm,{update_res,
+		    #resource{id = 16,name = "Ayumi"}}),
+	      gen_server:cast(
+		rm,{remove_res,
+		    #resource{id = 13,name = "None"}}),
+	      Pid
       end,
-      fun(_) ->
-	      gen_server:cast(rm,stop) end,
+      fun(_Pid) ->
+	      gen_server:cast(rm,stop)
+      end,
       ?_test(
 	 begin
-	     ReloadRes = reload_resource(),
-	     ExistRes = #resource{id = 16},
-	     ?assertEqual(11,gen_server:call(
-			      rm,get_res_num)),
-	     ?assertEqual([ExistRes| ReloadRes],
-			  gen_server:call(rm,get_res)),
-	     gen_server:cast(rm,{add_res,ExistRes}),
-	     ?assertEqual(11,gen_server:call(
-			      rm,get_res_num)),
-	     ?assertEqual([ExistRes| ReloadRes],
-			  gen_server:call(rm,get_res)),
-	     AnotherRes = #resource{id = 18},
-	     gen_server:cast(rm,{add_res,AnotherRes}),
-	     ?assertEqual(12,gen_server:call(
-			      rm,get_res_num)),
-	     ?assertEqual([AnotherRes,ExistRes|ReloadRes],
-			  gen_server:call(rm,get_res))
-	 end
-	)
-     }
-    }.
-
-find_resource_test_() ->
-    {spawn,
-     {setup,
-      fun() ->
-	      rm:start_link() end,
-      fun(_) ->
-	      gen_server:cast(rm,stop) end,
-      [?_assertEqual(#resource{id = 1},
-		     gen_server:call(rm,{find_res,
-					 #resource{id = 1}})),
-       ?_assertEqual(notexist,
-		     gen_server:call(rm,{find_res,
-					 #resource{id = 10}}))
-      ]
-     }
-    }.
-		    
-remove_resource_test_() ->			      
-    {spawn,
-     {setup,
-      fun() ->
-	      rm:start_link() end,
-      fun(_) ->
-	      gen_server:cast(rm,stop) end,
-      ?_test(
-	 begin
-	     ?assertEqual(10,
-			  gen_server:call(rm,get_res_num)),
-	     gen_server:cast(rm,{remove_res,
-				 #resource{id = 6}}),
-	     ?assertEqual(9,
-			  gen_server:call(rm,get_res_num)),
-	     ?assertEqual(
-		notexist,
-		gen_server:call(rm,{find_res,
-				    #resource{id = 6}})),
-	     gen_server:cast(rm,{remove_res,
-				 #resource{id = 6}}),
-	     ?assertEqual(9,
-			  gen_server:call(rm,get_res_num))
-	 end)
-     }
-    }.
-
-reload_resource_test_() ->	     
-    {spawn,
-     {setup,
-      fun() ->
-	      rm:start_link() end,
-      fun(_) ->
-	      gen_server:cast(rm,stop) end,
-      ?_test(
-	 begin
-	     gen_server:cast(rm,{remove_res,
-				 #resource{id = 6}}),
-	     gen_server:cast(rm,{add_res,
-				 #resource{id = 12}}),
+	     Res16 = #resource{id = 16},
+	     Reply16 = gen_server:call(rm,{find_res,Res16}),
+	     ?assertEqual(#resource{id = 16,name = "Ayumi"},
+			  Reply16),
+	     Res13 = #resource{id = 13},
+	     Reply13 = gen_server:call(rm,{find_res,Res13}),
+	     ?assertEqual(notexist,Reply13),
 	     gen_server:cast(rm,reload_res),
-	     ?assertEqual(reload_resource(),
-			  gen_server:call(rm,get_res))
+	     timer:sleep(200),
+	     ?assertEqual(#resource{id = 16,name = "BoA"},
+			 gen_server:call(
+			   rm,{find_res,Res16})),
+	     ?assertEqual(#resource{id = 13},
+			  gen_server:call(
+			    rm,{find_res,#resource{id = 13}}))
 	 end
 	)
      }
     }.
+
 
 
       

@@ -54,7 +54,17 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 init(_Args) ->
-    {ok,reload_resource()}.
+    Filename = "/tmp/" ++ pid_to_list(self()),
+    dets:open_file(rmTab,[{auto_save,10000},
+			  {keypos,#resource.id},
+			  {file,Filename}]),
+    case dets:info(rmTab,no_objects) of
+	0 ->
+	    reload_resource();
+	_ ->
+	    ok
+    end,
+    {ok,ok}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -71,19 +81,13 @@ init(_Args) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({find_res,#resource{id = ID}},_From,State) ->
-    List = [Res || Res <- State, Res#resource.id =:= ID],
-    Reply = try hd(List) of
-		Item -> Item
-	    catch
-		error:badarg -> notexist
-	    end,
+    case dets:lookup(rmTab,ID) of
+	[Res] ->
+	    Reply = Res;
+	[] ->
+	    Reply = notexist
+    end,
     {reply,Reply,State};
-
-handle_call(get_res_num, _From, State) ->
-    {reply,length(State),State};
-
-handle_call(get_res, _From, State) ->
-    {reply,State,State};
 
 handle_call(_Request, _From, State) ->
     Reply = ok,
@@ -102,23 +106,18 @@ handle_call(_Request, _From, State) ->
 handle_cast(stop,State) ->
     {stop,normal,State};
 
-handle_cast({add_res,#resource{id = ID} = Res},State) ->
-    case lists:any(fun(#resource{} = X) ->
-			 X#resource.id =:= ID end,State) of
-	true -> 
-	    {noreply, State};
-	false ->
-	    NewState = [Res | State],
-	    {noreply,NewState}
-    end;
+handle_cast({update_res,#resource{} = Res},State) ->
+    ok = dets:insert(rmTab,Res),
+    {noreply,State};
 
-handle_cast({remove_res,#resource{} = Res},State) ->
-    NewState = lists:delete(Res,State),
-    {noreply, NewState};
+handle_cast({remove_res,#resource{id = ID} = _Res},State) ->
+    ok = dets:delete(rmTab,ID),
+    {noreply,State};
 
-handle_cast(reload_res,_State) ->
-    NewState = reload_resource(),
-    {noreply,NewState};
+handle_cast(reload_res,State) ->
+    dets:delete_all_objects(rmTab),
+    reload_resource(),
+    {noreply,State};
     
 handle_cast(_Msg,State) ->
     {noreply, State}.
@@ -168,9 +167,10 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 
 reload_resource() ->
-    Seq = lists:seq(0,9),
-    lists:foldr(fun(X,List) ->
-			[#resource{id = X} | List]
-		end,
-		[],Seq).
+    Seq = lists:seq(1,1000),
+    lists:foreach(
+      fun(X) ->
+	      dets:insert(rmTab,
+			  #resource{id = X}) end,
+      Seq).
    
