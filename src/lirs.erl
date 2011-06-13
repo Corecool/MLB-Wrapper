@@ -175,6 +175,7 @@ init_tables(test) ->
     ets:insert(lirsRam,{conf,{size,5},{lirPercent,0.6}}).
 
 create_tables() ->
+    ets:new(visitTab,[named_table]),
     ets:new(lirsRam,[named_table]).
 
 init_tables() ->
@@ -209,7 +210,7 @@ update(Key,ID,Status) when
     update(Key,NewQueue).    				 
     
 %% 下面为业务逻辑方法，上面为持久化方法（涉及ets）
-
+%% 下面有ets参与到注入代码，其于LIRS无关，用于缓存异步通知
 get_cur_lirs_num() ->
     [{lirQueue,LirQueue}] = lookup(lirQueue),
     length(LirQueue).
@@ -255,7 +256,9 @@ remove_oldest_hiritem() ->
     OldestHirItem = lists:last(lookup(hirQueue,2)),
     update(OldestHirItem#cacheItem.id,non_resident),
     remove_from_queue(OldestHirItem,hirQueue),
-    change_state_in_lirqueue(OldestHirItem,non_resident).
+    change_state_in_lirqueue(OldestHirItem,non_resident),
+    %% 注入代码
+    ets:insert(visitTab,{oldID,OldestHirItem#cacheItem.id}).
 
 change_state_in_lirqueue(#cacheItem{} = Item,State) ->
     update(lirQueue,Item#cacheItem.id,State).
@@ -294,6 +297,7 @@ initial_stage(ID) ->
 	[Item] ->
 	    move_top(Item,lirQueue);
 	[] ->
+	    ets:insert(visitTab,{newID,ID}), %%注入代码
 	    Item = update(ID,lir),
 	    enter_queue(Item,lirQueue)
     end.
@@ -354,6 +358,7 @@ old_lir_to_hir() ->
 
 %% 访问缓存未命中资源。
 access_non_resident(ID) ->
+    ets:insert(visitTab,{newID,ID}), %%注入代码
     before_enter_hir_queue(),
     case lists:filter(
 	   fun(#cacheItem{} = X) ->
@@ -380,7 +385,22 @@ visit_resource(ID) ->
 	    access_hir(ID);
 	PrevStatus == non_resident ->
 	    access_non_resident(ID)
-    end.
+    end,
+    cache_notify(ets:member(visitTab,newID),
+		 ets:member(visitTab,oldID)).
+
+cache_notify(false,false) ->
+    true;
+cache_notify(true,true) ->
+    NewID = ets:lookup_element(visitTab,newID,2),
+    OldID = ets:lookup_element(visitTab,oldID,2),
+    gen_server:cast(cache,{cacheNotify,NewID,OldID}),
+    ets:delete_all_objects(visitTab);
+cache_notify(true,false) ->
+    NewID = ets:lookup_element(visitTab,newID,2),
+    gen_server:cast(cache,{cacheNotify,NewID}),
+    ets:delete_all_objects(visitTab).
+    
 
 %% debug(ID) ->
 %%     ?debugFmt("lirQueue is:~p~n",[lookup(lirQueue,2)]),

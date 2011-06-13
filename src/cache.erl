@@ -4,9 +4,9 @@
 %%% @doc
 %%%
 %%% @end
-%%% Created :  1 Jun 2011 by Corecool <>
+%%% Created : 12 Jun 2011 by Corecool <>
 %%%-------------------------------------------------------------------
--module(rm).
+-module(cache).
 
 -behaviour(gen_server).
 
@@ -26,6 +26,7 @@
 		  name = "BoA",
 		  description = "Best of Asia",
 		  rating = "BoA, you are still my No.1"}).
+
 
 %%%===================================================================
 %%% API
@@ -57,16 +58,7 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 init(_Args) ->
-    Filename = "/tmp/" ++ pid_to_list(self()),
-    dets:open_file(rmTab,[{auto_save,10000},
-			  {keypos,#resource.id},
-			  {file,Filename}]),
-    case dets:info(rmTab,no_objects) of
-	0 ->
-	    reload_resource();
-	_ ->
-	    ok
-    end,
+    ets:new(cacheTab,[named_table,{keypos,#resource.id}]),
     {ok,ok}.
 
 %%--------------------------------------------------------------------
@@ -83,12 +75,24 @@ init(_Args) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call({find_res,#resource{id = ID}},_From,State) ->
-    {reply,find_res(ID),State};
-handle_call({find_res,ID},_From,State) when is_integer(ID) ->
-    {reply,find_res(ID),State}.
-
-
+handle_call({visit,#resource{id = ID} = Res},_From,State) ->
+    case ets:member(cacheTab,ID) of
+	true ->
+	    gen_server:cast(lirs,{visit,ID}),
+	    [Reply] = ets:lookup(cacheTab,ID);
+	false ->
+	    Reply = gen_server:call(rm,{find_res,Res}),
+	    if
+		Reply /= notexist ->
+		    gen_server:cast(lirs,{visit,ID});
+		true -> ok
+	    end
+    end,
+    {reply,Reply,State};
+	    
+handle_call(_Request, _From, State) ->
+    Reply = ok,
+    {reply, Reply, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -103,23 +107,20 @@ handle_call({find_res,ID},_From,State) when is_integer(ID) ->
 handle_cast(stop,State) ->
     {stop,normal,State};
 
-handle_cast({update_res,#resource{} = Res},State) ->
-    ok = dets:insert(rmTab,Res),
+%% 用于LIRS判断缓存尚未满时
+handle_cast({cacheNotify,NewID},State) ->
+    add_res(NewID),
     {noreply,State};
-
-handle_cast({remove_res,#resource{id = ID} = _Res},State) ->
-    ok = dets:delete(rmTab,ID),
-    {noreply,State};
-
-handle_cast(reload_res,State) ->
-    dets:delete_all_objects(rmTab),
-    reload_resource(),
+			  
+%% 用于LIRS常规缓存替换，NewID为当前访问资源而OldID为置换出
+%% 缓存的资源
+handle_cast({cacheNotify,NewID,OldID},State) ->
+    remove_res(OldID),
+    add_res(NewID),
     {noreply,State};
     
-handle_cast(_Msg,State) ->
+handle_cast(_Msg, State) ->
     {noreply, State}.
-
-
 
 %%--------------------------------------------------------------------
 %% @private
@@ -162,21 +163,16 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-reload_resource() ->
-    Seq = lists:seq(1,1000),
-    lists:foreach(
-      fun(X) ->
-	      dets:insert(rmTab,
-			  #resource{id = X}) end,
-      Seq).
-
-find_res(ID) ->
-    case dets:lookup(rmTab,ID) of
-	[Item] ->
-	    Item;
-	[] ->
-	    notexist
+add_res(ID) ->
+    case gen_server:call(rm,{find_res,ID}) of
+	notexist ->
+	    true;
+	Res ->
+	    ets:insert(cacheTab,Res)
     end.
-     
+
+remove_res(ID) ->
+    ets:delete(cacheTab,ID).
     
+    
+	    
