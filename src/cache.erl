@@ -12,9 +12,11 @@
 
 -define(NOTEST, true).
 -include_lib("eunit/include/eunit.hrl").
+-include("../include/resource.hrl").
 
 %% API
--export([start_link/0]).
+-export([start_link/0,stop/0]).
+-export([visit_res/1,notify/1,notify/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -22,10 +24,6 @@
 
 -define(SERVER, ?MODULE). 
 
--record(resource,{id,
-		  name = "BoA",
-		  description = "Best of Asia",
-		  rating = "BoA, you are still my No.1"}).
 
 
 %%%===================================================================
@@ -41,6 +39,42 @@
 %%--------------------------------------------------------------------
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Stop the server
+%%
+%% @spec stop() -> {stop,normal,State}
+%% @end
+%%--------------------------------------------------------------------
+stop() ->
+    gen_server:cast(?SERVER,stop).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Visit the cache to get the resource.
+%%
+%% @spec visit_res(#resource{}) -> #resource{} | notexist
+%% @end
+%%--------------------------------------------------------------------
+visit_res(#resource{} = Res) ->
+    gen_server:call(?SERVER,{visit,Res}).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Notify the cache to update.
+%%
+%% @spec notify() -> {noreply,State}
+%% @end
+%%--------------------------------------------------------------------
+notify(NewID) when is_integer(NewID) ->
+    gen_server:cast(?SERVER,{cacheNotify,NewID}).
+
+notify(NewID,OldID) when 
+      is_integer(NewID), is_integer(OldID)->
+    gen_server:cast(?SERVER,{cacheNotify,NewID,OldID}).
+
+    
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -78,21 +112,18 @@ init(_Args) ->
 handle_call({visit,#resource{id = ID} = Res},_From,State) ->
     case ets:member(cacheTab,ID) of
 	true ->
-	    gen_server:cast(lirs,{visit,ID}),
+	    lirs:visit_res(ID),
 	    [Reply] = ets:lookup(cacheTab,ID);
 	false ->
-	    Reply = gen_server:call(rm,{find_res,Res}),
+	    Reply = rm:find_res(Res),
 	    if
 		Reply /= notexist ->
-		    gen_server:cast(lirs,{visit,ID});
+		    lirs:visit_res(ID);
 		true -> ok
 	    end
     end,
-    {reply,Reply,State};
-	    
-handle_call(_Request, _From, State) ->
-    Reply = ok,
-    {reply, Reply, State}.
+    {reply,Reply,State}.
+	  
 
 %%--------------------------------------------------------------------
 %% @private
@@ -164,7 +195,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 add_res(ID) ->
-    case gen_server:call(rm,{find_res,ID}) of
+    case rm:find_res(ID) of
 	notexist ->
 	    true;
 	Res ->

@@ -1,7 +1,7 @@
 -module(lirs_tests).
 -include_lib("eunit/include/eunit.hrl").
+-include("../include/cacheItem.hrl").
 
--record(cacheItem,{id,status}).
 
 lookup(Key) ->
     ets:lookup(lirsRam,Key).
@@ -12,7 +12,7 @@ init_test_() ->
       fun() ->
 	      lirs:start_link() end,
       fun(_) ->
-	      gen_server:cast(lirs,stop)
+	      lirs:stop()
       end,
       [?_assertMatch([{lirQueue,[]}],lookup(lirQueue)),
        ?_assertMatch([{hirQueue,[]}],lookup(hirQueue)),
@@ -26,11 +26,11 @@ first_lirs_test_() ->
      {setup,
       fun() ->
 	      lirs:start_link(),
-	      gen_server:cast(lirs,{visit,5}),
+	      lirs:visit_res(5),
 	      timer:sleep(100)
       end,
       fun(_) ->
-	      gen_server:cast(lirs,stop)
+	      lirs:stop()
       end,
       [?_assertEqual([{lirQueue,
 		       [#cacheItem{id = 5, status = lir}]}],
@@ -45,13 +45,13 @@ second_lirs_test_() ->
      {setup,
       fun() ->
 	      lirs:start_link(),
-	      gen_server:cast(lirs,{visit,1}),
-	      gen_server:cast(lirs,{visit,5}),
-	      gen_server:cast(lirs,{visit,1}),
+	      lirs:visit_res(1),
+	      lirs:visit_res(5),
+	      lirs:visit_res(1),
 	      timer:sleep(100)
       end,
       fun(_) ->
-	      gen_server:cast(lirs,stop)
+	      lirs:stop()
       end,
       [?_test(
 	  begin
@@ -72,14 +72,14 @@ third_lirs_test_() ->
      {setup,
       fun() ->
      	      lirs:start_link(),
-     	      gen_server:cast(lirs,{visit,1}),
-     	      gen_server:cast(lirs,{visit,2}),
-     	      gen_server:cast(lirs,{visit,3}),
-	      gen_server:cast(lirs,{visit,4}),
+     	      lirs:visit_res(1),
+	      lirs:visit_res(2),
+	      lirs:visit_res(3),
+	      lirs:visit_res(4),
      	      timer:sleep(100)
       end,
       fun(_) ->
-     	      gen_server:cast(lirs,stop)
+     	      lirs:stop()
       end,
       [?_test(
 	  begin
@@ -113,20 +113,20 @@ fourth_lirs_test_() ->
      {setup,
       fun() ->
      	      lirs:start_link(),
-     	      gen_server:cast(lirs,{visit,5}),
-     	      gen_server:cast(lirs,{visit,7}),
-	      gen_server:cast(lirs,{visit,8}),
-	      gen_server:cast(lirs,{visit,5}),
-	      gen_server:cast(lirs,{visit,3}),
-	      gen_server:cast(lirs,{visit,8}),
-	      gen_server:cast(lirs,{visit,6}),
-     	      gen_server:cast(lirs,{visit,6}),
-	      gen_server:cast(lirs,{visit,2}),
-	      gen_server:cast(lirs,{visit,7}),
+     	      lirs:visit_res(5),
+	      lirs:visit_res(7),
+	      lirs:visit_res(8),
+	      lirs:visit_res(5),
+	      lirs:visit_res(3),
+	      lirs:visit_res(8),
+	      lirs:visit_res(6),
+	      lirs:visit_res(6),
+	      lirs:visit_res(2),
+	      lirs:visit_res(7),
      	      timer:sleep(500)
       end,
       fun(_) ->
-     	      gen_server:cast(lirs,stop)
+     	      lirs:stop()
       end,
       [?_test(
 	  begin
@@ -167,17 +167,17 @@ fivth_lirs_test_() ->
      {setup,
       fun() ->
      	      lirs:start_link(test),
-     	      gen_server:cast(lirs,{visit,4}),
-     	      gen_server:cast(lirs,{visit,8}),
-     	      gen_server:cast(lirs,{visit,3}),
-	      gen_server:cast(lirs,{visit,5}),
-	      gen_server:cast(lirs,{visit,7}),
-	      gen_server:cast(lirs,{visit,9}),
-     	      gen_server:cast(lirs,{visit,5}),
+     	      lirs:visit_res(4),
+	      lirs:visit_res(8),
+	      lirs:visit_res(3),
+	      lirs:visit_res(5),
+	      lirs:visit_res(7),
+	      lirs:visit_res(9),
+	      lirs:visit_res(5),
      	      timer:sleep(100)
       end,
       fun(_) ->
-     	      gen_server:cast(lirs,stop)
+     	      lirs:stop()
       end,
       [?_test(
 	  begin

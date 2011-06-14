@@ -1,12 +1,8 @@
 -module(cache_tests).
 
 -include_lib("eunit/include/eunit.hrl").
-
--record(cacheItem,{id,status}).
--record(resource,{id,
-		  name = "BoA",
-		  description = "Best of Asia",
-		  rating = "BoA, you are still my No.1"}).
+-include("../include/resource.hrl").
+-include("../include/cacheItem.hrl").
 
 lookup(Key) ->
     ets:lookup(lirsRam,Key).
@@ -20,22 +16,20 @@ simple_resource_test_() ->
 	      cache:start_link()
       end,
       fun(_) ->
-	      gen_server:cast(cache,stop),
-	      gen_server:cast(lirs,stop),
-	      gen_server:cast(rm,stop)
+	      cache:stop(),
+	      lirs:stop(),
+	      rm:stop()
       end,
       [?_test(
 	 begin
-	     Res = gen_server:call(
-		     cache,{visit,#resource{id = 999}}),
+	     Res = cache:visit_res(#resource{id = 999}),
 	     ?assertEqual(#resource{id = 999,name = "BoA"},
 			  Res)
 	 end
 	 ),
        ?_test(
 	  begin
-	      Res = gen_server:call(
-		      cache,{visit,#resource{id = 1001}}),
+	      Res = cache:visit_res(#resource{id = 1001}),
 	      ?assertEqual(notexist,Res)
 	  end
 	 )]
@@ -55,21 +49,21 @@ resource_test_() ->
 	      Res6 = #resource{id = 6},
 	      Res7 = #resource{id = 7},
 	      Res8 = #resource{id = 8},
-     	      gen_server:call(cache,{visit,Res5}),
-     	      gen_server:call(cache,{visit,Res7}),
-	      gen_server:call(cache,{visit,Res8}),
-	      gen_server:call(cache,{visit,Res5}),
-	      gen_server:call(cache,{visit,Res3}),
-	      gen_server:call(cache,{visit,Res8}),
-	      gen_server:call(cache,{visit,Res6}),
-     	      gen_server:call(cache,{visit,Res6}),
-	      gen_server:call(cache,{visit,Res2}),
-	      gen_server:call(cache,{visit,Res7})
+	      cache:visit_res(Res5),
+	      cache:visit_res(Res7),
+	      cache:visit_res(Res8),
+	      cache:visit_res(Res5),
+	      cache:visit_res(Res3),
+	      cache:visit_res(Res8),
+	      cache:visit_res(Res6),
+	      cache:visit_res(Res6),
+	      cache:visit_res(Res2),
+	      cache:visit_res(Res7)
       end,
       fun(_) ->
-     	      gen_server:cast(cache,stop),
-	      gen_server:cast(lirs,stop),
-	      gen_server:cast(rm,stop)
+     	      cache:stop(),
+	      lirs:stop(),
+	      rm:stop()
       end,
       [?_test(
 	  begin

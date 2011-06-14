@@ -12,9 +12,10 @@
 
 -define(NOTEST, true).
 -include_lib("eunit/include/eunit.hrl").
-
+-include("../include/resource.hrl").
 %% API
--export([start_link/0]).
+-export([start_link/0,stop/0]).
+-export([find_res/1,update_res/1,remove_res/1,reload_res/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -22,10 +23,6 @@
 
 -define(SERVER, ?MODULE). 
 
--record(resource,{id,
-		  name = "BoA",
-		  description = "Best of Asia",
-		  rating = "BoA, you are still my No.1"}).
 
 %%%===================================================================
 %%% API
@@ -41,6 +38,57 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Stop RM Server
+%%
+%% @spec stop() -> {stop,Reason,State}
+%% @end
+%%--------------------------------------------------------------------			
+stop() ->
+    gen_server:cast(?SERVER,stop).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Find the resource
+%%
+%% @spec find_res(#resource{} | ID) -> #resource{} | notexist
+%% @end
+%%--------------------------------------------------------------------
+find_res(#resource{} = Res) -> 
+    gen_server:call(?SERVER,{find_res,Res});
+find_res(ID) when is_integer(ID) ->
+    gen_server:call(?SERVER,{find_res,ID}).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Update the resource
+%%
+%% @spec update_res(#resource{}) -> {noreply,State}
+%% @end
+%%--------------------------------------------------------------------
+update_res(#resource{} = Res) ->
+    gen_server:cast(?SERVER,{update_res,Res}).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Remove the resource
+%%
+%% @spec remove_res(#resource{}) -> {noreply,State}
+%% @end
+%%--------------------------------------------------------------------
+remove_res(#resource{} = Res) ->
+    gen_server:cast(?SERVER,{remove_res,Res}).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Reload the resource
+%%
+%% @spec reload_res() ->  {noreply,State}
+%% @end
+%%--------------------------------------------------------------------
+reload_res() ->
+    gen_server:cast(?SERVER,reload_res).
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -84,9 +132,10 @@ init(_Args) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({find_res,#resource{id = ID}},_From,State) ->
-    {reply,find_res(ID),State};
-handle_call({find_res,ID},_From,State) when is_integer(ID) ->
-    {reply,find_res(ID),State}.
+    {reply,find(ID),State};
+handle_call({find_res,ID},_From,State) when 
+      is_integer(ID) ->
+    {reply,find(ID),State}.
 
 
 
@@ -114,10 +163,8 @@ handle_cast({remove_res,#resource{id = ID} = _Res},State) ->
 handle_cast(reload_res,State) ->
     dets:delete_all_objects(rmTab),
     reload_resource(),
-    {noreply,State};
-    
-handle_cast(_Msg,State) ->
-    {noreply, State}.
+    {noreply,State}.
+
 
 
 
@@ -171,7 +218,7 @@ reload_resource() ->
 			  #resource{id = X}) end,
       Seq).
 
-find_res(ID) ->
+find(ID) ->
     case dets:lookup(rmTab,ID) of
 	[Item] ->
 	    Item;

@@ -12,9 +12,11 @@
 
 -define(NOTEST, true).
 -include_lib("eunit/include/eunit.hrl").
+-include("../include/cacheItem.hrl").
 
 %% API
--export([start_link/0,start_link/1]).
+-export([start_link/0,start_link/1,stop/0]).
+-export([visit_res/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -22,7 +24,7 @@
 
 -define(SERVER, ?MODULE). 
 
--record(cacheItem,{id,status}).
+
 
 %%%===================================================================
 %%% API
@@ -44,6 +46,26 @@ start_link(test) ->
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, 
 			  [],[]).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Stop the server
+%%
+%% @spec stop() -> {stop,normal,State}
+%% @end
+%%--------------------------------------------------------------------
+stop() ->
+    gen_server:cast(?SERVER,stop).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Change the LIRS server status through resource visiting.
+%%
+%% @spec visit_res(ID) -> {noreply,State}
+%% @end
+%%--------------------------------------------------------------------
+visit_res(ID) when is_integer(ID) ->
+    gen_server:cast(?SERVER,{visit,ID}).
 
 
 %%%===================================================================
@@ -394,11 +416,11 @@ cache_notify(false,false) ->
 cache_notify(true,true) ->
     NewID = ets:lookup_element(visitTab,newID,2),
     OldID = ets:lookup_element(visitTab,oldID,2),
-    gen_server:cast(cache,{cacheNotify,NewID,OldID}),
+    cache:notify(NewID,OldID),
     ets:delete_all_objects(visitTab);
 cache_notify(true,false) ->
     NewID = ets:lookup_element(visitTab,newID,2),
-    gen_server:cast(cache,{cacheNotify,NewID}),
+    cache:notify(NewID),
     ets:delete_all_objects(visitTab).
     
 
