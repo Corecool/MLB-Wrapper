@@ -59,6 +59,7 @@ resource_test_() ->
 	      cache:visit_res(Res6),
 	      cache:visit_res(Res2),
 	      cache:visit_res(Res7)
+	      
       end,
       fun(_) ->
      	      cache:stop(),
