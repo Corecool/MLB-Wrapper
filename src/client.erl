@@ -15,10 +15,17 @@
 -include("../include/resource.hrl").
 
 %% API
+%% client as a real client. Compair with the Server API, it has another parameter which called Pid.
+-export([start_link/1,stop/1]).
+-export([make_random_requests/3,get_random_requests/1,
+	simulate/1]).
+-export([visit_res/2]).
+
+%% register the server. Client as the one of the server components.
 -export([start_link/0,stop/0]).
 -export([make_random_requests/2,get_random_requests/0,
 	simulate/0]).
--export([visit_res/1]).
+-export([visit_res/1]).  
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -36,9 +43,12 @@
 %% @doc
 %% Starts the server
 %%
-%% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
+%% @spec start_link() | start_link(client) -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
+start_link(client) ->
+    gen_server:start_link(?MODULE,[],[]).
+
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
@@ -46,45 +56,60 @@ start_link() ->
 %% @doc
 %% Stop the server
 %%
-%% @spec stop() -> {stop,normal,State}
+%% @spec stop() | stop(Pid) -> {stop,normal,State}
 %% @end
 %%--------------------------------------------------------------------
+stop(Pid) ->
+    gen_server:cast(Pid,stop).
+
 stop() ->
     gen_server:cast(?SERVER,stop).
 %%--------------------------------------------------------------------
 %% @doc
 %% Build the random requests to get the test results.
 %%
-%% @spec make_random_requests() -> {noreply,State}
+%% @spec make_random_requests() | make_random_request(Pid) -> {noreply,State}
 %% @end
 %%--------------------------------------------------------------------
+make_random_requests(ResRange,ReqNum,Pid) ->
+    gen_server:cast(Pid,{make_req,ResRange,ReqNum}).
+
 make_random_requests(ResRange,ReqNum) ->
     gen_server:cast(?SERVER,{make_req,ResRange,ReqNum}).
 %%--------------------------------------------------------------------
 %% @doc
 %% Get the random requests to verify the builder.
 %%
-%% @spec get_random_requests() -> [Requests]
+%% @spec get_random_requests() | get_random_requests(Pid) -> [Requests]
 %% @end
 %%--------------------------------------------------------------------
+get_random_requests(Pid) ->
+    gen_server:call(Pid,get_reqs).
+
 get_random_requests() ->
     gen_server:call(?SERVER,get_reqs).
 %%--------------------------------------------------------------------
 %% @doc
 %% Simulate the resource requests.
 %%
-%% @spec simulate() -> [Request Resource]
+%% @spec simulate() | simulate(Pid) -> [Request Resource]
 %% @end
 %%--------------------------------------------------------------------
+simulate(Pid) ->
+    gen_server:call(Pid,simulate,infinity).
+
 simulate() ->
-    gen_server:call(?SERVER,simulate).
+    gen_server:call(?SERVER,simulate,infinity).
 %%--------------------------------------------------------------------
 %% @doc
 %% visit the single resource.
 %%
-%% @spec visit_res() -> Request Resource
+%% @spec visit_res(#resource{}) | visit_res(#resource{},Pid) -> Request Resource
 %% @end
 %%--------------------------------------------------------------------
+visit_res(#resource{} = Res,Pid) ->
+    gen_server:call(Pid,{visit,Res}).
+
 visit_res(#resource{} = Res) ->
     gen_server:call(?SERVER,{visit,Res}).
 %%%===================================================================
@@ -103,7 +128,7 @@ visit_res(#resource{} = Res) ->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-    {ok, []}.
+    {ok, [],infinity}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -197,15 +222,15 @@ code_change(_OldVsn, State, _Extra) ->
 build_reqs(_ResRange,0,State) ->
     State;
 build_reqs(ResRange,ReqNum,State) ->
-    %% Range = random:uniform(10),
-    %% ID = if
-    %% 	     Range =< 8 ->
-    %% 		 random:uniform(round(ResRange* 0.2));
-    %% 	     true ->
-    %% 		 random:uniform(round(ResRange * 0.8)) +
-    %% 		     round(ResRange * 0.2)
-    %% 	 end,
-    ID = random:uniform(ResRange),
+    Range = random:uniform(10),
+    ID = if
+    	     Range =< 8 ->
+    		 random:uniform(round(ResRange* 0.2));
+    	     true ->
+    		 random:uniform(round(ResRange * 0.8)) +
+    		     round(ResRange * 0.2)
+    	 end,
+    %% ID = random:uniform(ResRange),
     NewState = [#resource{id = ID} | State],
     build_reqs(ResRange,ReqNum - 1,NewState).
     

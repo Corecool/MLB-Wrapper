@@ -64,10 +64,13 @@ stop() ->
 %% @spec visit_res(ID) -> {noreply,State}
 %% @end
 %%--------------------------------------------------------------------
+%% 异步版本
 visit_res(ID) when is_integer(ID) ->
     gen_server:cast(?SERVER,{visit,ID}).
 
-
+%% 同步版本
+%% visit_res(ID) when is_integer(ID) ->
+%%     gen_server:call(?SERVER,{visit,ID}).
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -107,8 +110,8 @@ init(_Args) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call(Request, _From, State) ->
-    Reply = {Request,State},
+handle_call({visit,ID}, _From, State) ->
+    Reply = visit_resource(ID),    
     {reply, Reply, State}.
 
 %%--------------------------------------------------------------------
@@ -411,6 +414,7 @@ visit_resource(ID) ->
     cache_notify(ets:member(visitTab,newID),
 		 ets:member(visitTab,oldID)).
 
+%% 异步版本
 cache_notify(false,false) ->
     true;
 cache_notify(true,true) ->
@@ -422,7 +426,19 @@ cache_notify(true,false) ->
     NewID = ets:lookup_element(visitTab,newID,2),
     cache:notify(NewID),
     ets:delete_all_objects(visitTab).
-    
+
+%% 同步版本    
+%% cache_notify(false,false) ->
+%%     true;
+%% cache_notify(true,true) ->
+%%     NewID = ets:lookup_element(visitTab,newID,2),
+%%     OldID = ets:lookup_element(visitTab,oldID,2),
+%%     ets:delete_all_objects(visitTab),
+%%     {NewID,OldID};
+%% cache_notify(true,false) ->
+%%     NewID = ets:lookup_element(visitTab,newID,2),
+%%     ets:delete_all_objects(visitTab),
+%%     NewID.
 
 %% debug(ID) ->
 %%     ?debugFmt("lirQueue is:~p~n",[lookup(lirQueue,2)]),

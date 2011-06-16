@@ -58,7 +58,7 @@ stop() ->
 %% @end
 %%--------------------------------------------------------------------
 visit_res(#resource{} = Res) ->
-    gen_server:call(?SERVER,{visit,Res}).
+    gen_server:call(?SERVER,{visit,Res},infinity).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -109,6 +109,8 @@ init(_Args) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+
+%% 异步版本
 handle_call({visit,#resource{id = ID} = Res},_From,State) ->
     case ets:member(cacheTab,ID) of
 	true ->
@@ -123,6 +125,36 @@ handle_call({visit,#resource{id = ID} = Res},_From,State) ->
 	    end
     end,
     {reply,Reply,State}.
+
+%% 同步版本
+%% handle_call({visit,#resource{id = ID} = Res},_From,State) ->
+%%     case ets:member(cacheTab,ID) of
+%% 	true ->
+%% 	    case lirs:visit_res(ID) of
+%% 		{NewID,OldID} ->
+%% 		    remove_res(OldID),
+%% 		    add_res(NewID);
+%% 		NewID when is_integer(NewID) ->
+%% 		    add_res(NewID);
+%% 		true -> ok
+%% 	    end,
+%% 	    [Reply] = ets:lookup(cacheTab,ID);
+%% 	false ->
+%% 	    Reply = rm:find_res(Res),
+%% 	    if
+%% 		Reply /= notexist ->
+%% 		    case lirs:visit_res(ID) of
+%% 			{NewID,OldID} ->
+%% 			    remove_res(OldID),
+%% 			    add_res(NewID);
+%% 			NewID when is_integer(NewID) ->
+%% 			    add_res(NewID);
+%% 			true -> ok
+%% 		    end;
+%% 		true -> ok
+%% 	    end
+%%     end,
+%%     {reply,Reply,State}.
 	  
 
 %%--------------------------------------------------------------------
