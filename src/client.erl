@@ -14,6 +14,9 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("../include/resource.hrl").
 
+-define(SYNC,sync).
+-define(ASYNC,async).
+
 %% API
 %% client as a real client. Compair with the Server API, it has another parameter which called Pid.
 -export([start_link/1,stop/1]).
@@ -128,7 +131,7 @@ visit_res(#resource{} = Res) ->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-    {ok, [],infinity}.
+    {ok, []}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -146,12 +149,24 @@ init([]) ->
 %%--------------------------------------------------------------------
 handle_call(simulate, _From, State) ->
     statistics(wall_clock),
-    Reply = loop_visit(State,[]),
-    {_,Time} = statistics(wall_clock),
-    ?debugFmt("Time is: ~pms ~n", [Time]),
-    {reply,Reply,[]};
+    SyncReply = loop_visit(State,[],?SYNC),
+    {_,SyncTime} = statistics(wall_clock),
+    ?debugFmt("Sync time is: ~pms ~n", [SyncTime]),
+    
+    cache:clear(),
+    check_lirs_init(),   
+
+    statistics(wall_clock),
+    AsyncReply = loop_visit(State,[],?ASYNC),
+    {_,AsyncTime} = statistics(wall_clock),
+    ?debugFmt("ASync time is: ~pms ~n", [AsyncTime]),
+    
+    ?assertEqual(SyncReply,AsyncReply),
+    {reply,SyncReply,[]};
+
 handle_call({visit,Res}, _From, State) ->
     {reply,cache:visit_res(Res),State};
+
 handle_call(get_reqs, _From, State) ->
     Reply = State,
     {reply, Reply, State}.
@@ -174,9 +189,6 @@ handle_cast({make_req,ResRange,ReqNum}, State) ->
     random:seed(A,B,C),
     NewState = build_reqs(ResRange,ReqNum,State),
     {noreply, NewState}.
-
-    
-
 
 %%--------------------------------------------------------------------
 %% @private
@@ -230,13 +242,25 @@ build_reqs(ResRange,ReqNum,State) ->
     		 random:uniform(round(ResRange * 0.8)) +
     		     round(ResRange * 0.2)
     	 end,
-    %% ID = random:uniform(ResRange),
     NewState = [#resource{id = ID} | State],
     build_reqs(ResRange,ReqNum - 1,NewState).
     
-loop_visit([],VisitRes) ->
+loop_visit([],VisitRes,Flag) when
+      Flag ==?ASYNC; Flag ==?SYNC ->
     VisitRes;
-loop_visit([Res | OtherRes],VisitRes) ->
-    Resource = cache:visit_res(Res),
-    loop_visit(OtherRes,[Resource | VisitRes]).
-    
+loop_visit([Res | OtherRes],VisitRes,?SYNC) ->
+    Resource = cache:visit_res(Res,?SYNC),
+    loop_visit(OtherRes,[Resource | VisitRes],?SYNC);
+loop_visit([Res | OtherRes],VisitRes,?ASYNC) ->
+    Resource = cache:visit_res(Res,?ASYNC),
+    loop_visit(OtherRes,[Resource | VisitRes],?ASYNC).
+
+check_lirs_init() ->    
+    ?assertMatch([{lirQueue,[]}],
+		 ets:lookup(lirsRam,lirQueue)),
+    ?assertMatch([{hirQueue,[]}],
+		 ets:lookup(lirsRam,hirQueue)),
+    ?assertEqual(3,ets:info(lirsRam,size)),
+    ?assertEqual(0,ets:info(visitTab,size)),
+    ?assertEqual(0,ets:info(cacheTab,size)).
+

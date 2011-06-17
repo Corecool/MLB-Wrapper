@@ -15,16 +15,16 @@
 -include("../include/resource.hrl").
 
 %% API
--export([start_link/0,stop/0]).
--export([visit_res/1,notify/1,notify/2]).
+-export([start_link/0,stop/0,clear/0]).
+-export([visit_res/1,visit_res/2,notify/1,notify/2]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE). 
-
-
+-define(SYNC,sync).
+-define(ASYNC,async).
 
 %%%===================================================================
 %%% API
@@ -52,13 +52,29 @@ stop() ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Reset the cache status. It first reset the LIRS metadata and then clear the cache. This Function is used for restart the LIRS algorithm.
+%%
+%% @spec clear() -> ok
+%% @end
+%%--------------------------------------------------------------------
+clear() ->
+    gen_server:call(?SERVER,clear).
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Visit the cache to get the resource.
 %%
 %% @spec visit_res(#resource{}) -> #resource{} | notexist
+%% @spec visit_res(#resource{},?SYNC | ?ASYNC) -> #resource{} | notexist
 %% @end
 %%--------------------------------------------------------------------
+visit_res(#resource{} = Res,?SYNC) ->
+    gen_server:call(?SERVER,{?SYNC,visit,Res});
+visit_res(#resource{} = Res,?ASYNC) ->
+    ?MODULE:visit_res(Res).
+
 visit_res(#resource{} = Res) ->
-    gen_server:call(?SERVER,{visit,Res},infinity).
+    gen_server:call(?SERVER,{?ASYNC,visit,Res}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -110,52 +126,14 @@ init(_Args) ->
 %% @end
 %%--------------------------------------------------------------------
 
-%% 异步版本
-handle_call({visit,#resource{id = ID} = Res},_From,State) ->
-    case ets:member(cacheTab,ID) of
-	true ->
-	    lirs:visit_res(ID),
-	    [Reply] = ets:lookup(cacheTab,ID);
-	false ->
-	    Reply = rm:find_res(Res),
-	    if
-		Reply /= notexist ->
-		    lirs:visit_res(ID);
-		true -> ok
-	    end
-    end,
-    {reply,Reply,State}.
+handle_call({Flag,visit,#resource{} = Res},
+	    _From,State) when 
+      Flag == ?SYNC; Flag == ?ASYNC ->
+    {reply,lookup(Res,Flag),State};
 
-%% 同步版本
-%% handle_call({visit,#resource{id = ID} = Res},_From,State) ->
-%%     case ets:member(cacheTab,ID) of
-%% 	true ->
-%% 	    case lirs:visit_res(ID) of
-%% 		{NewID,OldID} ->
-%% 		    remove_res(OldID),
-%% 		    add_res(NewID);
-%% 		NewID when is_integer(NewID) ->
-%% 		    add_res(NewID);
-%% 		true -> ok
-%% 	    end,
-%% 	    [Reply] = ets:lookup(cacheTab,ID);
-%% 	false ->
-%% 	    Reply = rm:find_res(Res),
-%% 	    if
-%% 		Reply /= notexist ->
-%% 		    case lirs:visit_res(ID) of
-%% 			{NewID,OldID} ->
-%% 			    remove_res(OldID),
-%% 			    add_res(NewID);
-%% 			NewID when is_integer(NewID) ->
-%% 			    add_res(NewID);
-%% 			true -> ok
-%% 		    end;
-%% 		true -> ok
-%% 	    end
-%%     end,
-%%     {reply,Reply,State}.
-	  
+handle_call(clear, _From, State) ->
+    reset_status(),
+    {reply,ok,State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -180,10 +158,7 @@ handle_cast({cacheNotify,NewID},State) ->
 handle_cast({cacheNotify,NewID,OldID},State) ->
     remove_res(OldID),
     add_res(NewID),
-    {noreply,State};
-    
-handle_cast(_Msg, State) ->
-    {noreply, State}.
+    {noreply,State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -236,6 +211,40 @@ add_res(ID) ->
 
 remove_res(ID) ->
     ets:delete(cacheTab,ID).
-    
-    
-	    
+
+lookup(#resource{id = ID} = Res,Flag) ->
+    case ets:member(cacheTab,ID) of
+	true ->
+	    [Reply] = ets:lookup(cacheTab,ID),
+	    update_lirs(ID,Flag);
+	false ->
+	    Reply = rm:find_res(Res),
+	    if
+		Reply /= notexist ->
+		    update_lirs(ID,Flag);
+		true -> ok
+	    end
+    end,
+    Reply.
+
+update_lirs(ID,?SYNC) ->
+    sync_update_lirs(ID);
+update_lirs(ID,?ASYNC) ->
+    async_update_lirs(ID).
+
+sync_update_lirs(ID) ->    
+    case lirs:visit_res(ID,?SYNC) of
+	{NewID,OldID} ->
+	    remove_res(OldID),
+	    add_res(NewID);
+	NewID when is_integer(NewID) ->
+	    add_res(NewID);
+	true -> ok
+    end.
+
+async_update_lirs(ID) ->	   
+    lirs:visit_res(ID,?ASYNC).
+
+reset_status() ->
+    ok = lirs:clear(),
+    ets:delete_all_objects(cacheTab).

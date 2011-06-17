@@ -15,15 +15,16 @@
 -include("../include/cacheItem.hrl").
 
 %% API
--export([start_link/0,start_link/1,stop/0]).
--export([visit_res/1]).
+-export([start_link/0,start_link/1,start_link/2,stop/0]).
+-export([visit_res/1,visit_res/2,clear/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE). 
-
+-define(SYNC,sync).
+-define(ASYNC,async).
 
 
 %%%===================================================================
@@ -47,6 +48,9 @@ start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, 
 			  [],[]).
 
+start_link(CacheSize,LirPercent) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE,
+			  {CacheSize,LirPercent},[]).
 %%--------------------------------------------------------------------
 %% @doc
 %% Stop the server
@@ -61,16 +65,28 @@ stop() ->
 %% @doc
 %% Change the LIRS server status through resource visiting.
 %%
-%% @spec visit_res(ID) -> {noreply,State}
+%% @spec visit_res(ID | ?ASYNC) -> {noreply,State}
+%% @spec visit_res(ID,?SYNC) -> {NewID,OldID} | NewID | true
 %% @end
 %%--------------------------------------------------------------------
-%% 异步版本
 visit_res(ID) when is_integer(ID) ->
     gen_server:cast(?SERVER,{visit,ID}).
 
-%% 同步版本
-%% visit_res(ID) when is_integer(ID) ->
-%%     gen_server:call(?SERVER,{visit,ID}).
+visit_res(ID,?SYNC) when is_integer(ID) ->
+    gen_server:call(?SERVER,{visit,ID});
+visit_res(ID,?ASYNC) when is_integer(ID) ->
+    ?MODULE:visit_res(ID).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Reset the LIRS status. This Function is used for restart the LIRS algorithm.
+%%
+%% @spec clear() -> ok
+%% @end
+%%--------------------------------------------------------------------
+clear() ->
+    gen_server:call(?SERVER,clear).
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -90,6 +106,10 @@ visit_res(ID) when is_integer(ID) ->
 init(test) ->
     create_tables(),
     init_tables(test),
+    {ok,ok};
+init({CacheSize,LirPercent}) ->
+    create_tables(),
+    init_tables(CacheSize,LirPercent),
     {ok,ok};
 init(_Args) ->
     create_tables(),
@@ -111,8 +131,11 @@ init(_Args) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call({visit,ID}, _From, State) ->
-    Reply = visit_resource(ID),    
-    {reply, Reply, State}.
+    Reply = visit_resource(ID,?SYNC),    
+    {reply, Reply, State};
+handle_call(clear, _From, State) ->
+    reset_status(),
+    {reply,ok,State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -127,7 +150,7 @@ handle_call({visit,ID}, _From, State) ->
 handle_cast(stop,State) ->
     {stop,normal,State};
 handle_cast({visit,ID},State) ->
-    visit_resource(ID),
+    visit_resource(ID,?ASYNC),
     {noreply,State};
 handle_cast(_Msg, State) ->
     {noreply, State}.
@@ -207,8 +230,13 @@ init_tables() ->
     ets:insert(lirsRam,{lirQueue,[]}),
     ets:insert(lirsRam,{hirQueue,[]}),
     ets:insert(lirsRam,{conf,{size,5},{lirPercent,0.6}}).
-    
 
+init_tables(CacheSize,LirPercent) ->
+    ets:insert(lirsRam,{lirQueue,[]}),
+    ets:insert(lirsRam,{hirQueue,[]}),
+    ets:insert(lirsRam,{conf,{size,CacheSize},
+			{lirPercent,LirPercent}}).
+    
 lookup(Key) ->
     ets:lookup(lirsRam,Key).
 
@@ -397,7 +425,7 @@ access_non_resident(ID) ->
 	    not_in_queue(Item)
     end.
 
-visit_resource(ID) ->
+visit_resource(ID,Flag) ->
     PrevStatus = get_res_prev_status(ID),
     CurLirNum = get_cur_lirs_num(),
     LirSize = get_lir_cache_size(),
@@ -411,34 +439,40 @@ visit_resource(ID) ->
 	PrevStatus == non_resident ->
 	    access_non_resident(ID)
     end,
-    cache_notify(ets:member(visitTab,newID),
+    cache_notify(Flag,
+		 ets:member(visitTab,newID),
 		 ets:member(visitTab,oldID)).
 
 %% 异步版本
-cache_notify(false,false) ->
+cache_notify(Flag,false,false) when
+      Flag == ?SYNC; Flag == ?ASYNC ->
     true;
-cache_notify(true,true) ->
+cache_notify(?ASYNC,true,true) ->
     NewID = ets:lookup_element(visitTab,newID,2),
     OldID = ets:lookup_element(visitTab,oldID,2),
     cache:notify(NewID,OldID),
     ets:delete_all_objects(visitTab);
-cache_notify(true,false) ->
+cache_notify(?ASYNC,true,false) ->
     NewID = ets:lookup_element(visitTab,newID,2),
     cache:notify(NewID),
-    ets:delete_all_objects(visitTab).
+    ets:delete_all_objects(visitTab);
 
 %% 同步版本    
-%% cache_notify(false,false) ->
-%%     true;
-%% cache_notify(true,true) ->
-%%     NewID = ets:lookup_element(visitTab,newID,2),
-%%     OldID = ets:lookup_element(visitTab,oldID,2),
-%%     ets:delete_all_objects(visitTab),
-%%     {NewID,OldID};
-%% cache_notify(true,false) ->
-%%     NewID = ets:lookup_element(visitTab,newID,2),
-%%     ets:delete_all_objects(visitTab),
-%%     NewID.
+cache_notify(?SYNC,true,true) ->
+    NewID = ets:lookup_element(visitTab,newID,2),
+    OldID = ets:lookup_element(visitTab,oldID,2),
+    ets:delete_all_objects(visitTab),
+    {NewID,OldID};
+cache_notify(?SYNC,true,false) ->
+    NewID = ets:lookup_element(visitTab,newID,2),
+    ets:delete_all_objects(visitTab),
+    NewID.
+
+reset_status() ->
+    [{conf,{size,Size},{lirPercent,Percent}}] = lookup(conf),
+    ets:delete_all_objects(lirsRam),
+    ets:delete_all_objects(visitTab),
+    init_tables(Size,Percent).
 
 %% debug(ID) ->
 %%     ?debugFmt("lirQueue is:~p~n",[lookup(lirQueue,2)]),

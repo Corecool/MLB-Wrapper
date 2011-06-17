@@ -56,9 +56,9 @@ stop() ->
 %% @end
 %%--------------------------------------------------------------------
 find_res(#resource{} = Res) -> 
-    gen_server:call(?SERVER,{find_res,Res});
+    gen_server:call(?SERVER,{find_res,Res},infinity);
 find_res(ID) when is_integer(ID) ->
-    gen_server:call(?SERVER,{find_res,ID}).
+    gen_server:call(?SERVER,{find_res,ID},infinity).
 
 %%--------------------------------------------------------------------
 %% @doc

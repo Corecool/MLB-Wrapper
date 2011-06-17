@@ -21,6 +21,20 @@ init_test_() ->
      }
     }.
 
+configure_test_() ->
+    {spawn,
+     {setup,
+      fun() ->
+	      lirs:start_link(100,0.8) end,
+      fun(_) ->
+	      lirs:stop() end,
+      [?_assertMatch([{lirQueue,[]}],lookup(lirQueue)),
+       ?_assertMatch([{hirQueue,[]}],lookup(hirQueue)),
+       ?_assertEqual([{conf,{size,100},{lirPercent,0.8}}],
+		     lookup(conf))]
+     }
+    }.
+
 first_lirs_test_() ->
     {spawn,
      {setup,

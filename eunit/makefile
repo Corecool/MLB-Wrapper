@@ -16,6 +16,10 @@ all: compile
 				 -s client_tests test \
 				 -s init stop
 
+# all: compile
+# 	${ERL} -pa ${OUTPUTBEAM} -s client_tests test \
+# 				 -s init stop
+
 compile: srcdir ${MODS:%=%.beam} 
 
 srcdir:

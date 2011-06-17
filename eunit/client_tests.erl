@@ -32,10 +32,10 @@ single_client_simulate_test_() ->
      {setup,
       fun() ->
 	      rm:start_link(),
-	      lirs:start_link(),
+	      lirs:start_link(100,0.6),
 	      cache:start_link(),
 	      client:start_link(),
-	      client:make_random_requests(1200,50000)	  
+	      client:make_random_requests(1200,10000)	  
       end,
       fun(_) ->
 	      client:stop(),
@@ -43,13 +43,14 @@ single_client_simulate_test_() ->
 	      lirs:stop(),
 	      rm:stop()
       end,
-      {timeout,10,
+      {timeout,30,
        ?_test(
 	  begin
 	      Resources = client:simulate(),
-	      ?assertEqual(50000,length(Resources)),
+	      ?assertEqual(10000,length(Resources)),
 	      ?assertEqual(
-		 0,length(client:get_random_requests()))
+		 0,length(client:get_random_requests())),
+	      timer:sleep(5000)
 	  end)
       }
      }
