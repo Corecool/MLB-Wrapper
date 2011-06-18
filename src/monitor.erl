@@ -4,38 +4,22 @@
 %%% @doc
 %%%
 %%% @end
-%%% Created : 16 Jun 2011 by Corecool <>
+%%% Created : 18 Jun 2011 by Corecool <>
 %%%-------------------------------------------------------------------
--module(client).
+-module(monitor).
 
 -behaviour(gen_server).
 
--define(NOTEST, true).
--include_lib("eunit/include/eunit.hrl").
--include("../include/resource.hrl").
-
--define(SYNC,sync).
--define(ASYNC,async).
-
 %% API
-%% client as a real client. Compair with the Server API, it has another parameter which called Pid.
--export([start_link/1,stop/1]).
--export([make_random_requests/3,get_random_requests/1,
-	simulate/1]).
--export([visit_res/2]).
-
-%% register the server. Client as the one of the server components.
 -export([start_link/0,stop/0]).
--export([make_random_requests/2,get_random_requests/0,
-	simulate/0]).
--export([visit_res/1]).  
+-export([inc_cache_miss/0,inc_res_miss/0,inc_notify/0,
+	reset_counter/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE). 
-
 
 
 %%%===================================================================
@@ -46,12 +30,9 @@
 %% @doc
 %% Starts the server
 %%
-%% @spec start_link() | start_link(client) -> {ok, Pid} | ignore | {error, Error}
+%% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(client) ->
-    gen_server:start_link(?MODULE,[],[]).
-
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
@@ -62,59 +43,37 @@ start_link() ->
 %% @spec stop() | stop(Pid) -> {stop,normal,State}
 %% @end
 %%--------------------------------------------------------------------
-stop(Pid) ->
-    gen_server:cast(Pid,stop).
-
 stop() ->
     gen_server:cast(?SERVER,stop).
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Build the random requests to get the test results.
+%% These functions are used to increase the monitor data.
 %%
-%% @spec make_random_requests() | make_random_request(Pid) -> {noreply,State}
+%% @spec inc_cache_miss() -> {noreply,State}
+%% @spec inc_res_miss() -> {noreply,State}
+%% @spec inc_notify() -> {noreply,State}
 %% @end
 %%--------------------------------------------------------------------
-make_random_requests(ResRange,ReqNum,Pid) ->
-    gen_server:cast(Pid,{make_req,ResRange,ReqNum}).
+inc_cache_miss() ->
+    gen_server:cast(?SERVER,inc_cache).
 
-make_random_requests(ResRange,ReqNum) ->
-    gen_server:cast(?SERVER,{make_req,ResRange,ReqNum}).
+inc_res_miss() ->
+    gen_server:cast(?SERVER,inc_res).
+
+inc_notify() ->
+    gen_server:cast(?SERVER,inc_notify).
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Get the random requests to verify the builder.
+%% It is used to reset all counters.
 %%
-%% @spec get_random_requests() | get_random_requests(Pid) -> [Requests]
+%% @spec reset_counter() -> {noreply,State}
 %% @end
 %%--------------------------------------------------------------------
-get_random_requests(Pid) ->
-    gen_server:call(Pid,get_reqs).
+reset_counter() ->
+    gen_server:cast(?SERVER,reset).
 
-get_random_requests() ->
-    gen_server:call(?SERVER,get_reqs).
-%%--------------------------------------------------------------------
-%% @doc
-%% Simulate the resource requests.
-%%
-%% @spec simulate() | simulate(Pid) -> [Request Resource]
-%% @end
-%%--------------------------------------------------------------------
-simulate(Pid) ->
-    gen_server:call(Pid,simulate,infinity).
-
-simulate() ->
-    gen_server:call(?SERVER,simulate,infinity).
-%%--------------------------------------------------------------------
-%% @doc
-%% visit the single resource.
-%%
-%% @spec visit_res(#resource{}) | visit_res(#resource{},Pid) -> Request Resource
-%% @end
-%%--------------------------------------------------------------------
-visit_res(#resource{} = Res,Pid) ->
-    gen_server:call(Pid,{visit,Res}).
-
-visit_res(#resource{} = Res) ->
-    gen_server:call(?SERVER,{visit,Res}).
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -131,7 +90,9 @@ visit_res(#resource{} = Res) ->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-    {ok, []}.
+    create_tables(),
+    init_tables(),
+    {ok, ok}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -147,28 +108,8 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call(simulate, _From, State) ->
-    statistics(wall_clock),
-    SyncReply = loop_visit(State,[],?SYNC),
-    {_,SyncTime} = statistics(wall_clock),
-    ?debugFmt("Sync time is: ~pms ~n", [SyncTime]),
-    
-    cache:clear(),
-    check_lirs_init(),   
-
-    statistics(wall_clock),
-    AsyncReply = loop_visit(State,[],?ASYNC),
-    {_,AsyncTime} = statistics(wall_clock),
-    ?debugFmt("ASync time is: ~pms ~n", [AsyncTime]),
-    
-    ?assertEqual(SyncReply,AsyncReply),
-    {reply,SyncReply,[]};
-
-handle_call({visit,Res}, _From, State) ->
-    {reply,cache:visit_res(Res),State};
-
-handle_call(get_reqs, _From, State) ->
-    Reply = State,
+handle_call(_Request, _From, State) ->
+    Reply = ok,
     {reply, Reply, State}.
 
 %%--------------------------------------------------------------------
@@ -184,11 +125,25 @@ handle_call(get_reqs, _From, State) ->
 handle_cast(stop,State) ->
     {stop,normal,State};
 
-handle_cast({make_req,ResRange,ReqNum}, State) ->
-    {A,B,C} = now(),
-    random:seed(A,B,C),
-    NewState = build_reqs(ResRange,ReqNum,State),
-    {noreply, NewState}.
+handle_cast(inc_cache,State) ->
+    {cacheMiss,Counter} = lookup(cacheMiss),
+    update({cacheMiss,Counter + 1}),
+    {noreply,State};
+
+handle_cast(inc_res,State) ->
+    {resMiss,Counter} = lookup(resMiss),
+    update({resMiss,Counter + 1}),
+    {noreply,State};
+
+handle_cast(inc_notify,State) ->
+    {notify,Counter} = lookup(notify),
+    update({notify,Counter + 1}),
+    {noreply,State};
+
+handle_cast(reset,State) ->
+    init_tables(),
+    {noreply,State}.
+    
 
 %%--------------------------------------------------------------------
 %% @private
@@ -231,34 +186,22 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-build_reqs(_ResRange,0,State) ->
-    State;
-build_reqs(ResRange,ReqNum,State) ->
-    Range = random:uniform(10),
-    ID = if
-    	     Range =< 8 ->
-    		 random:uniform(round(ResRange* 0.2));
-    	     true ->
-    		 random:uniform(round(ResRange * 0.8)) +
-    		     round(ResRange * 0.2)
-    	 end,
-    NewState = [#resource{id = ID} | State],
-    build_reqs(ResRange,ReqNum - 1,NewState).
-    
-loop_visit([],VisitRes,Flag) when
-      Flag ==?ASYNC; Flag ==?SYNC ->
-    VisitRes;
-loop_visit([Res | OtherRes],VisitRes,Flag) when
-      Flag ==?ASYNC; Flag ==?SYNC ->
-    Resource = cache:visit_res(Res,Flag),
-    loop_visit(OtherRes,[Resource | VisitRes],Flag).
+create_tables() ->
+    ets:new(monitorTab,[named_table]).
 
-check_lirs_init() ->    
-    ?assertMatch([{lirQueue,[]}],
-		 ets:lookup(lirsRam,lirQueue)),
-    ?assertMatch([{hirQueue,[]}],
-		 ets:lookup(lirsRam,hirQueue)),
-    ?assertEqual(3,ets:info(lirsRam,size)),
-    ?assertEqual(0,ets:info(visitTab,size)),
-    ?assertEqual(0,ets:info(cacheTab,size)).
+init_tables() ->
+    ets:insert(monitorTab,{cacheMiss,0}),
+    ets:insert(monitorTab,{resMiss,0}),
+    ets:insert(monitorTab,{notify,0}).
 
+%% 因为MonitorTab是set类型
+lookup(Key) ->
+    case ets:lookup(monitorTab,Key) of
+	[Obj] ->
+	    Obj;
+	[] ->
+	    notexist
+    end.
+
+update(Obj) ->
+    ets:insert(monitorTab,Obj).

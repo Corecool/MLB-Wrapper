@@ -7,7 +7,7 @@ OUTPUTBEAM = ${MLB_WRAPPER_HOME}/ebin
 
 ERL = erl -boot start_clean 
 
-MODS = rm lirs cache client
+MODS = rm lirs cache client monitor
 
 all: compile
 
