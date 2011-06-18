@@ -350,6 +350,7 @@ initial_stage(ID) ->
 	[Item] ->
 	    move_top(Item,lirQueue);
 	[] ->
+	    monitor:inc_cache_miss(),
 	    ets:insert(visitTab,{newID,ID}), %%注入代码
 	    Item = update(ID,lir),
 	    enter_queue(Item,lirQueue)
@@ -411,6 +412,7 @@ old_lir_to_hir() ->
 
 %% 访问缓存未命中资源。
 access_non_resident(ID) ->
+    monitor:inc_cache_miss(),
     ets:insert(visitTab,{newID,ID}), %%注入代码
     before_enter_hir_queue(),
     case lists:filter(

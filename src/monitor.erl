@@ -13,7 +13,9 @@
 %% API
 -export([start_link/0,stop/0]).
 -export([inc_cache_miss/0,inc_res_miss/0,inc_notify/0,
-	reset_counter/0]).
+	 reset_counter/0]).
+-export([get_cache_miss/0,get_res_miss/0,
+	 get_notify_count/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -66,6 +68,23 @@ inc_notify() ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% These functions are used to get the monitor data.
+%%
+%% @spec get_cache_miss() -> Integer
+%% @spec get_res_miss() -> Integer
+%% @spec get_notify_count() -> Integer
+%% @end
+%%--------------------------------------------------------------------
+get_cache_miss() ->
+    gen_server:call(?SERVER,cache_miss).
+
+get_res_miss() ->
+    gen_server:call(?SERVER,res_miss).
+
+get_notify_count() ->
+    gen_server:call(?SERVER,notify_count).
+%%--------------------------------------------------------------------
+%% @doc
 %% It is used to reset all counters.
 %%
 %% @spec reset_counter() -> {noreply,State}
@@ -108,9 +127,19 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_call(_Request, _From, State) ->
-    Reply = ok,
-    {reply, Reply, State}.
+handle_call(cache_miss, _From, State) ->
+    {cacheMiss,Counter} = lookup(cacheMiss),
+    {reply, Counter, State};
+
+handle_call(res_miss, _From, State) ->
+    {resMiss,Counter} = lookup(resMiss),
+    {reply,Counter,State};
+
+handle_call(notify_count, _From, State) ->
+    {notify,Counter} = lookup(notify),
+    {reply,Counter,State}.
+
+
 
 %%--------------------------------------------------------------------
 %% @private

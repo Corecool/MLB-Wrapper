@@ -10,17 +10,17 @@ ERL = erl -boot start_clean -pa ${MLB_WRAPPER_HOME}/ebin
 MODS = rm_tests lirs_tests cache_tests client_tests \
        monitor_tests
 
-all: compile
-	${ERL} -pa ${OUTPUTBEAM} -s rm_tests test \
-				 -s lirs_tests test \
-				 -s cache_tests test \
-				 -s client_tests test \
-				 -s monitor_tests test \
-				 -s init stop
-
 # all: compile
-# 	${ERL} -pa ${OUTPUTBEAM} -s client_tests test \
+# 	${ERL} -pa ${OUTPUTBEAM} -s rm_tests test \
+# 				 -s lirs_tests test \
+# 				 -s cache_tests test \
+# 				 -s client_tests test \
+# 				 -s monitor_tests test \
 # 				 -s init stop
+
+all: compile
+	${ERL} -pa ${OUTPUTBEAM} -s client_tests test \
+				 -s init stop
 
 compile: srcdir ${MODS:%=%.beam} 
 

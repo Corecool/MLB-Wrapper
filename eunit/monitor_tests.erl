@@ -2,9 +2,6 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-lookup(Key,Pos) ->
-    ets:lookup_element(monitorTab,Key,Pos).
-    
 monitor_init_test_() ->
     {spawn,
      {setup,
@@ -14,9 +11,9 @@ monitor_init_test_() ->
       fun(_) ->
 	      monitor:stop()
       end,
-      [?_assertEqual(0,lookup(cacheMiss,2)),
-       ?_assertEqual(0,lookup(resMiss,2)),
-       ?_assertEqual(0,lookup(notify,2))]
+      [?_assertEqual(0,monitor:get_cache_miss()),
+       ?_assertEqual(0,monitor:get_res_miss()),
+       ?_assertEqual(0,monitor:get_notify_count())]
      }
     }.
 
@@ -34,9 +31,9 @@ sample_test_() ->
       fun(_) ->
 	      monitor:stop()
       end,
-      [?_assertEqual(2,lookup(cacheMiss,2)),
-       ?_assertEqual(1,lookup(resMiss,2)),
-       ?_assertEqual(1,lookup(notify,2))]
+      [?_assertEqual(2,monitor:get_cache_miss()),
+       ?_assertEqual(1,monitor:get_res_miss()),
+       ?_assertEqual(1,monitor:get_notify_count())]
      }
     }.
 
@@ -56,8 +53,10 @@ reset_test_() ->
       fun(_) ->
 	      monitor:stop()
       end,
-      [?_assertEqual(0,lookup(cacheMiss,2)),
-       ?_assertEqual(0,lookup(resMiss,2)),
-       ?_assertEqual(1,lookup(notify,2))]
+      [?_assertEqual(0,monitor:get_cache_miss()),
+       ?_assertEqual(0,monitor:get_res_miss()),
+       ?_assertEqual(1,monitor:get_notify_count())]
      }
     }.
+
+

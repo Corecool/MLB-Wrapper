@@ -39,18 +39,21 @@ first_lirs_test_() ->
     {spawn,
      {setup,
       fun() ->
+	      monitor:start_link(),
 	      lirs:start_link(),
 	      lirs:visit_res(5),
 	      timer:sleep(100)
       end,
       fun(_) ->
-	      lirs:stop()
+	      lirs:stop(),
+	      monitor:stop()
       end,
       [?_assertEqual([{lirQueue,
 		       [#cacheItem{id = 5, status = lir}]}],
 		     lookup(lirQueue)),
        ?_assertEqual([{hirQueue,[]}],lookup(hirQueue)),
-       ?_assertMatch([{5,lir}],lookup(5))]
+       ?_assertMatch([{5,lir}],lookup(5)),
+       ?_assertEqual(1,monitor:get_cache_miss())]
       }
      }.
 
@@ -58,6 +61,7 @@ second_lirs_test_() ->
     {spawn,
      {setup,
       fun() ->
+	      monitor:start_link(),
 	      lirs:start_link(),
 	      lirs:visit_res(1),
 	      lirs:visit_res(5),
@@ -65,7 +69,8 @@ second_lirs_test_() ->
 	      timer:sleep(100)
       end,
       fun(_) ->
-	      lirs:stop()
+	      lirs:stop(),
+	      monitor:stop()
       end,
       [?_test(
 	  begin
@@ -77,7 +82,8 @@ second_lirs_test_() ->
 	  end),
        ?_assertEqual([{hirQueue,[]}],lookup(hirQueue)),
        ?_assertMatch([{5,lir}],lookup(5)),
-       ?_assertMatch([{1,lir}],lookup(1))]
+       ?_assertMatch([{1,lir}],lookup(1)),
+       ?_assertEqual(2,monitor:get_cache_miss())]
      }
     }.
 
@@ -85,6 +91,7 @@ third_lirs_test_() ->
     {spawn,
      {setup,
       fun() ->
+	      monitor:start_link(),
      	      lirs:start_link(),
      	      lirs:visit_res(1),
 	      lirs:visit_res(2),
@@ -93,7 +100,8 @@ third_lirs_test_() ->
      	      timer:sleep(100)
       end,
       fun(_) ->
-     	      lirs:stop()
+     	      lirs:stop(),
+	      monitor:stop()
       end,
       [?_test(
 	  begin
@@ -117,7 +125,8 @@ third_lirs_test_() ->
 	      ?assertMatch([{2,lir}],lookup(2)),
 	      ?assertMatch([{3,lir}],lookup(3)),
 	      ?assertMatch([{4,hir}],lookup(4))
-	  end)]
+	  end),
+       ?_assertEqual(4,monitor:get_cache_miss())]
      }
     }.
 
@@ -126,6 +135,7 @@ fourth_lirs_test_() ->
     {spawn,
      {setup,
       fun() ->
+	      monitor:start_link(),
      	      lirs:start_link(),
      	      lirs:visit_res(5),
 	      lirs:visit_res(7),
@@ -140,7 +150,8 @@ fourth_lirs_test_() ->
      	      timer:sleep(500)
       end,
       fun(_) ->
-     	      lirs:stop()
+     	      lirs:stop(),
+	      monitor:stop()
       end,
       [?_test(
 	  begin
@@ -171,7 +182,8 @@ fourth_lirs_test_() ->
 	      ?assertMatch([{6,lir}],lookup(6)),
 	      ?assertMatch([{7,hir}],lookup(7)),
 	      ?assertMatch([{8,lir}],lookup(8))
-	  end)]
+	  end),
+       ?_assertEqual(6,monitor:get_cache_miss())]
      }
     }.
 
@@ -180,6 +192,7 @@ fivth_lirs_test_() ->
     {spawn,
      {setup,
       fun() ->
+	      monitor:start_link(),
      	      lirs:start_link(test),
      	      lirs:visit_res(4),
 	      lirs:visit_res(8),
@@ -191,7 +204,8 @@ fivth_lirs_test_() ->
      	      timer:sleep(100)
       end,
       fun(_) ->
-     	      lirs:stop()
+     	      lirs:stop(),
+	      monitor:stop()
       end,
       [?_test(
 	  begin
@@ -224,6 +238,7 @@ fivth_lirs_test_() ->
 	      ?assertMatch([{1,non_resident}],lookup(1)),
 	      ?assertMatch([{4,hir}],lookup(4)),
 	      ?assertMatch([{9,hir}],lookup(9))
-	  end)]
+	  end),
+       ?_assertEqual(3,monitor:get_cache_miss())]
      }
     }.

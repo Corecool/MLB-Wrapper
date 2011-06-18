@@ -223,6 +223,7 @@ find(ID) ->
 	[Item] ->
 	    Item;
 	[] ->
+	    monitor:inc_res_miss(),
 	    notexist
     end.
      
