@@ -85,7 +85,7 @@ visit_res(ID,?ASYNC) when is_integer(ID) ->
 %% @end
 %%--------------------------------------------------------------------
 clear() ->
-    gen_server:call(?SERVER,clear).
+    gen_server:call(?SERVER,clear,infinity).
 
 %%%===================================================================
 %%% gen_server callbacks

@@ -149,19 +149,23 @@ init([]) ->
 %%--------------------------------------------------------------------
 handle_call(simulate, _From, State) ->
     statistics(wall_clock),
-    SyncReply = loop_visit(State,[],?SYNC),
-    {_,SyncTime} = statistics(wall_clock),
-    ?debugFmt("Sync time is: ~pms ~n", [SyncTime]),
-    ?debugFmt("Cache Miss: ~p~n",[monitor:get_cache_miss()]),
+    AsyncReply = loop_visit(State,[],?ASYNC),
+    {_,AsyncTime} = statistics(wall_clock),
+    timer:sleep(20000),
+    ?debugFmt("ASync time is: ~pms ~n", [AsyncTime]),
+    ?debugFmt("Cache Miss: ~p~n",
+	      [monitor:get_cache_miss()]),
     monitor:reset_counter(),
     cache:clear(),
     check_lirs_init(),   
     check_monitor_reset(),
     statistics(wall_clock),
-    AsyncReply = loop_visit(State,[],?ASYNC),
-    {_,AsyncTime} = statistics(wall_clock),
-    ?debugFmt("ASync time is: ~pms ~n", [AsyncTime]),
-    ?debugFmt("Cache Miss: ~p~n",[monitor:get_cache_miss()]),
+    SyncReply = loop_visit(State,[],?SYNC),
+    {_,SyncTime} = statistics(wall_clock),
+    ?debugFmt("Sync time is: ~pms ~n", [SyncTime]),
+    ?debugFmt("Cache Miss: ~p~n",
+	      [monitor:get_cache_miss()]),
+    
     ?assertEqual(SyncReply,AsyncReply),
     {reply,SyncReply,[]};
 
