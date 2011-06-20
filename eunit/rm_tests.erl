@@ -2,6 +2,35 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("../include/resource.hrl").
 
+-define(REMOTE,'node1@corecool-laptop').
+
+remote_rm_test_() ->
+    {spawn,
+     {setup,
+      fun() ->
+	      rpc:call(?REMOTE,rm,start_link,[]),
+	      rpc:cast(?REMOTE,rm,update_res,
+		       [#resource{id = 16,name = "Ayumi"}])
+      end,
+      fun(_) ->
+	      rpc:cast(?REMOTE,rm,stop,[])
+      end,
+      ?_test(
+	 begin
+	     Res16 = #resource{id = 16},
+	     Reply16 = rpc:call(?REMOTE,rm,find_res,[Res16]),
+	     ?assertEqual(#resource{id = 16,name = "Ayumi"},
+			  Reply16),
+	     rpc:cast(?REMOTE,rm,reload_res,[]),
+	     timer:sleep(200),
+	     ?assertEqual(#resource{id = 16,name = "BoA"},
+			  rpc:call(
+			    ?REMOTE,rm,find_res,[Res16]))
+	 end
+	)
+     }
+    }.
+
 update_resource_test_() ->
     {spawn,
      {setup,
