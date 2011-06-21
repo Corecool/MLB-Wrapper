@@ -9,7 +9,7 @@ ERL = erl -boot start_clean -pa ${MLB_WRAPPER_HOME}/ebin \
 	-sname node5 # -remsh 'node1@corecool-laptop'
 
 MODS = remote_rm_tests rm_tests lirs_tests cache_tests \
-       client_tests monitor_tests
+       client_tests monitor_tests simulate
 
 all: compile
 	${ERL} -pa ${OUTPUTBEAM} -s remote_rm_tests test \
@@ -21,7 +21,7 @@ all: compile
 				 -s init stop
 
 run: 
-	${ERL} -pa ${OUTPUTBEAM} -s client_tests test \
+	${ERL} -pa ${OUTPUTBEAM} -s simulate test \
 	  			 -s init stop
 
 compile: srcdir ${MODS:%=%.beam} 
