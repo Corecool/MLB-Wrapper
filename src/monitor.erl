@@ -13,9 +13,9 @@
 %% API
 -export([start_link/0,stop/0]).
 -export([inc_cache_miss/0,inc_res_miss/0,inc_notify/0,
-	 reset_counter/0]).
+	 inc_client_cache_miss/0,reset_counter/0]).
 -export([get_cache_miss/0,get_res_miss/0,
-	 get_notify_count/0]).
+	 get_notify_count/0,get_client_cache_miss/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -55,6 +55,7 @@ stop() ->
 %% @spec inc_cache_miss() -> {noreply,State}
 %% @spec inc_res_miss() -> {noreply,State}
 %% @spec inc_notify() -> {noreply,State}
+%% @spec inc_client_cache_miss() -> {noreply,State}
 %% @end
 %%--------------------------------------------------------------------
 inc_cache_miss() ->
@@ -66,6 +67,8 @@ inc_res_miss() ->
 inc_notify() ->
     gen_server:cast(?SERVER,inc_notify).
 
+inc_client_cache_miss() ->
+    gen_server:cast(?SERVER,inc_client_cache_miss).
 %%--------------------------------------------------------------------
 %% @doc
 %% These functions are used to get the monitor data.
@@ -73,8 +76,12 @@ inc_notify() ->
 %% @spec get_cache_miss() -> Integer
 %% @spec get_res_miss() -> Integer
 %% @spec get_notify_count() -> Integer
+%% @spce get_client_cache_miss() -> Integer
 %% @end
 %%--------------------------------------------------------------------
+get_client_cache_miss() ->
+    gen_server:call(?SERVER,client_miss).
+
 get_cache_miss() ->
     gen_server:call(?SERVER,cache_miss).
 
@@ -127,6 +134,10 @@ init([]) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_call(client_miss, _From, State) ->
+    {clientMiss,Counter} = lookup(clientMiss),
+    {reply, Counter, State};
+
 handle_call(cache_miss, _From, State) ->
     {cacheMiss,Counter} = lookup(cacheMiss),
     {reply, Counter, State};
@@ -153,6 +164,11 @@ handle_call(notify_count, _From, State) ->
 %%--------------------------------------------------------------------
 handle_cast(stop,State) ->
     {stop,normal,State};
+
+handle_cast(inc_client_cache_miss, State) ->
+    {clientMiss,Counter} = lookup(clientMiss),
+    update({clientMiss,Counter + 1}),
+    {noreply,State};
 
 handle_cast(inc_cache,State) ->
     {cacheMiss,Counter} = lookup(cacheMiss),
@@ -219,6 +235,7 @@ create_tables() ->
     ets:new(monitorTab,[named_table]).
 
 init_tables() ->
+    ets:insert(monitorTab,{clientMiss,0}),
     ets:insert(monitorTab,{cacheMiss,0}),
     ets:insert(monitorTab,{resMiss,0}),
     ets:insert(monitorTab,{notify,0}).

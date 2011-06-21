@@ -2,6 +2,8 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("../include/cacheItem.hrl").
 
+wait() ->
+    timer:sleep(100).
 
 lookup(Key) ->
     ets:lookup(lirsRam,Key).
@@ -12,7 +14,8 @@ init_test_() ->
       fun() ->
 	      lirs:start_link() end,
       fun(_) ->
-	      lirs:stop()
+	      lirs:stop(),
+	      wait()
       end,
       [?_assertMatch([{lirQueue,[]}],lookup(lirQueue)),
        ?_assertMatch([{hirQueue,[]}],lookup(hirQueue)),
@@ -27,7 +30,9 @@ configure_test_() ->
       fun() ->
 	      lirs:start_link(100,0.8) end,
       fun(_) ->
-	      lirs:stop() end,
+	      lirs:stop(),
+	      wait()
+      end,
       [?_assertMatch([{lirQueue,[]}],lookup(lirQueue)),
        ?_assertMatch([{hirQueue,[]}],lookup(hirQueue)),
        ?_assertEqual([{conf,{size,100},{lirPercent,0.8}}],
@@ -46,7 +51,8 @@ first_lirs_test_() ->
       end,
       fun(_) ->
 	      lirs:stop(),
-	      monitor:stop()
+	      monitor:stop(),
+	      wait()
       end,
       [?_assertEqual([{lirQueue,
 		       [#cacheItem{id = 5, status = lir}]}],
@@ -70,7 +76,8 @@ second_lirs_test_() ->
       end,
       fun(_) ->
 	      lirs:stop(),
-	      monitor:stop()
+	      monitor:stop(),
+	      wait()
       end,
       [?_test(
 	  begin
@@ -101,7 +108,8 @@ third_lirs_test_() ->
       end,
       fun(_) ->
      	      lirs:stop(),
-	      monitor:stop()
+	      monitor:stop(),
+	      wait()
       end,
       [?_test(
 	  begin
@@ -151,7 +159,8 @@ fourth_lirs_test_() ->
       end,
       fun(_) ->
      	      lirs:stop(),
-	      monitor:stop()
+	      monitor:stop(),
+	      wait()
       end,
       [?_test(
 	  begin
@@ -205,7 +214,8 @@ fivth_lirs_test_() ->
       end,
       fun(_) ->
      	      lirs:stop(),
-	      monitor:stop()
+	      monitor:stop(),
+	      wait()
       end,
       [?_test(
 	  begin

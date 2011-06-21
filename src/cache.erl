@@ -221,6 +221,7 @@ lookup(#resource{id = ID} = Res,Flag) ->
 	    Reply = remote_rm:find_res(Res),
 	    if
 		Reply /= notexist ->
+		    monitor:inc_client_cache_miss(),
 		    update_lirs(ID,Flag);
 		true -> ok
 	    end

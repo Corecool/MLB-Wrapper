@@ -2,6 +2,9 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("../include/resource.hrl").
 
+wait() ->
+    timer:sleep(100).
+
 rm_monitor_test_() ->
     {spawn,
      {setup,
@@ -11,7 +14,8 @@ rm_monitor_test_() ->
       end,
       fun(_) ->
 	      remote_rm:stop(),
-	      monitor:stop()
+	      monitor:stop(),
+	      wait()
       end,
       ?_test(
 	 begin
