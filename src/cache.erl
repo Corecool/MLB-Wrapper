@@ -202,7 +202,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 add_res(ID) ->
-    case rm:find_res(ID) of
+    case remote_rm:find_res(ID) of
 	notexist ->
 	    true;
 	Res ->
@@ -218,7 +218,7 @@ lookup(#resource{id = ID} = Res,Flag) ->
 	    [Reply] = ets:lookup(cacheTab,ID),
 	    update_lirs(ID,Flag);
 	false ->
-	    Reply = rm:find_res(Res),
+	    Reply = remote_rm:find_res(Res),
 	    if
 		Reply /= notexist ->
 		    update_lirs(ID,Flag);

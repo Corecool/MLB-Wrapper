@@ -112,7 +112,9 @@ reload_res() ->
 %% @end
 %%--------------------------------------------------------------------
 init(_Args) ->
-    Filename = "/tmp/" ++ pid_to_list(self()),
+%%    Filename = "/tmp/" ++ pid_to_list(self()),
+    process_flag(trap_exit, true),
+    Filename = "/tmp/rm_remote",
     dets:open_file(rmTab,[{auto_save,10000},
 			  {keypos,#resource.id},
 			  {file,Filename}]),
@@ -200,6 +202,7 @@ handle_info(_Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 terminate(_Reason, _State) ->
+    os:cmd("rm -f /tmp/remote_rm"),
     ok.
 
 %%--------------------------------------------------------------------

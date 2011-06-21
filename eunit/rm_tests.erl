@@ -4,6 +4,9 @@
 
 -define(REMOTE,'node1@corecool-laptop').
 
+wait() ->
+    timer:sleep(500).
+     
 remote_rm_test_() ->
     {spawn,
      {setup,
@@ -13,7 +16,8 @@ remote_rm_test_() ->
 		       [#resource{id = 16,name = "Ayumi"}])
       end,
       fun(_) ->
-	      rpc:cast(?REMOTE,rm,stop,[])
+	      rpc:cast(?REMOTE,rm,stop,[]),
+	      wait()
       end,
       ?_test(
 	 begin
@@ -43,7 +47,8 @@ update_resource_test_() ->
 	      Pid
       end,
       fun(_Pid) ->
-	      rm:stop()
+	      rm:stop(),
+	      wait()
       end,
       ?_test(
 	 begin
@@ -75,7 +80,8 @@ rm_monitor_test_() ->
       end,
       fun(_) ->
 	      rm:stop(),
-	      monitor:stop()
+	      monitor:stop(),
+	      wait()
       end,
       ?_test(
 	 begin

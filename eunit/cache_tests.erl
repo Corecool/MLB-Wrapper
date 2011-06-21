@@ -7,25 +7,29 @@
 lookup(Key) ->
     ets:lookup(lirsRam,Key).
 
+wait() ->
+    timer:sleep(500).
+
 simple_resource_test_() ->
     {spawn,
      {setup,
       fun() ->
-	      rm:start_link(),
+	      remote_rm:start_link(),
 	      lirs:start_link(),
 	      cache:start_link()
       end,
       fun(_) ->
 	      cache:stop(),
 	      lirs:stop(),
-	      rm:stop()
+	      remote_rm:stop(),
+	      wait()
       end,
       [?_test(
-	 begin
-	     Res = cache:visit_res(#resource{id = 999}),
-	     ?assertEqual(#resource{id = 999,name = "BoA"},
-			  Res)
-	 end
+	  begin
+	      Res = cache:visit_res(#resource{id = 999}),
+	      ?assertEqual(#resource{id = 999,name = "BoA"},
+			   Res)
+	  end
 	 ),
        ?_test(
 	  begin
@@ -40,7 +44,7 @@ resource_test_() ->
     {spawn,
      {setup,
       fun() ->
-     	      rm:start_link(),
+     	      remote_rm:start_link(),
 	      lirs:start_link(),
 	      cache:start_link(),
 	      Res2 = #resource{id = 2},
@@ -59,12 +63,12 @@ resource_test_() ->
 	      cache:visit_res(Res6),
 	      cache:visit_res(Res2),
 	      cache:visit_res(Res7)
-	      
       end,
       fun(_) ->
      	      cache:stop(),
 	      lirs:stop(),
-	      rm:stop()
+	      remote_rm:stop(),
+	      wait()
       end,
       [?_test(
 	  begin
