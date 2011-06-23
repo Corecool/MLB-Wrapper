@@ -10,6 +10,9 @@
 
 -behaviour(gen_server).
 
+-define(NOTEST, true).
+-include_lib("eunit/include/eunit.hrl").
+
 %% API
 -export([start_link/0,stop/0]).
 -export([inc_cache_miss/0,inc_res_miss/0,inc_notify/0,

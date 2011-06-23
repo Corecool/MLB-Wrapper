@@ -37,7 +37,7 @@
 %% @end
 %%--------------------------------------------------------------------
 start_link() ->
-    rpc:call(?REMOTE,gen_server,start_link,
+    rpc:block_call(?REMOTE,gen_server,start_link,
 	     [{local, ?SERVER}, ?MODULE, [], []]).
 
 %%--------------------------------------------------------------------
@@ -48,7 +48,7 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------			
 stop() ->
-    rpc:cast(?REMOTE,gen_server,cast,[?SERVER,stop]).
+    rpc:block_call(?REMOTE,gen_server,cast,[?SERVER,stop]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -58,10 +58,10 @@ stop() ->
 %% @end
 %%--------------------------------------------------------------------
 find_res(#resource{} = Res) -> 
-    rpc:call(?REMOTE,gen_server,call,
+    rpc:block_call(?REMOTE,gen_server,call,
 	     [?SERVER,{find_res,Res},infinity]);
 find_res(ID) when is_integer(ID) ->
-    rpc:call(?REMOTE,gen_server,call,
+    rpc:block_call(?REMOTE,gen_server,call,
 	     [?SERVER,{find_res,ID},infinity]).
 
 %%--------------------------------------------------------------------
@@ -72,7 +72,7 @@ find_res(ID) when is_integer(ID) ->
 %% @end
 %%--------------------------------------------------------------------
 update_res(#resource{} = Res) ->
-    rpc:cast(?REMOTE,gen_server,cast,
+    rpc:block_call(?REMOTE,gen_server,cast,
 	     [?SERVER,{update_res,Res}]).
 
 %%--------------------------------------------------------------------
@@ -83,7 +83,7 @@ update_res(#resource{} = Res) ->
 %% @end
 %%--------------------------------------------------------------------
 remove_res(#resource{} = Res) ->
-    rpc:cast(?REMOTE,gen_server,cast,
+    rpc:block_call(?REMOTE,gen_server,cast,
 	     [?SERVER,{remove_res,Res}]).
 
 %%--------------------------------------------------------------------
@@ -94,7 +94,7 @@ remove_res(#resource{} = Res) ->
 %% @end
 %%--------------------------------------------------------------------
 reload_res() ->
-    rpc:cast(?REMOTE,gen_server,cast,
+    rpc:block_call(?REMOTE,gen_server,cast,
 	     [?SERVER,reload_res]).
 %%%===================================================================
 %%% gen_server callbacks
@@ -124,7 +124,7 @@ init(_Args) ->
 	_ ->
 	    ok
     end,
-    {ok,ok}.
+    {ok,init_successed}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -233,7 +233,7 @@ find(ID) ->
 	[Item] ->
 	    Item;
 	[] ->
-	    rpc:cast(?LOCAL,monitor,inc_res_miss,[]),
+	    rpc:block_call(?LOCAL,monitor,inc_res_miss,[]),
 	    notexist
     end.
      
