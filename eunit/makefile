@@ -20,14 +20,14 @@ all: compile
 				 -s monitor_tests test \
 				 -s init stop
 
-run: 
+run: compile 
 	${ERL} -pa ${OUTPUTBEAM} -s simulate test \
 	  			 -s init stop
 
 compile: srcdir ${MODS:%=%.beam} 
 
 srcdir:
-	cd ${MLB_WRAPPER_HOME}/src; make -k
+	cd ${MLB_WRAPPER_HOME}/src; make -k compile
 
 clean:
 	rm -fr erl_crash.dump

@@ -9,9 +9,13 @@ ERL = erl -boot start_clean
 
 MODS = remote_rm rm lirs cache client monitor
 
-all: compile
+all: check
 
 compile: ${MODS:%=%.beam}
+
+check: compile
+	dialyzer --plt ${MLB_WRAPPER_HOME}/mlb.plt \
+	-r ${OUTPUTBEAM}
 
 clean:
 	rm -fr erl_crash.dump
